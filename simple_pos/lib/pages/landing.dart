@@ -13,7 +13,7 @@ class Landing extends StatelessWidget {
     return Scaffold(
       appBar: const CustomPOSAppBar(showReturnButton: false),
       body: SizedBox(
-      width: double.infinity,  // full width
+      width: double.infinity,  
       height: double.infinity, 
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -24,21 +24,30 @@ class Landing extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                MyIconButton(onPressed: (){
-                      NumberInputDialog.show(
+                MyIconButton(
+                  onPressed: () {
+                    NumberInputDialog.show(
                       context: context,
                       title: "ادخل الكود الخاص بالسلعة",
-                      onSubmit: (value) {
-                      print("Entered number: $value");},);
-                }, imagePath: "assets/icons/price.png", text: "الثمن",),
-                MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => POSPage()),);
+                      onSubmit: (_) {
+                      },
+                    );
+                  },
+                  imagePath: "assets/icons/price.png",
+                  text: "الثمن",
+                ),
+
+
+            
+            
+            MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => POSPage()),);
 }, imagePath: "assets/icons/sell.png", text: "بيع",),
               ],),
             ),
             Flexible(child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
-              children: [MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => POSPageStock()),);}, imagePath: "assets/icons/stock.png", text: "سلع",),],
+              children: [MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => POSPageStock()),);}, imagePath: "assets/icons/stock.png", text: "المخزن",),],
             )),
           ],
         ),

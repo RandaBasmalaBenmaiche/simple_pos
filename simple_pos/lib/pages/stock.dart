@@ -166,9 +166,19 @@ class _POSPageState extends State<POSPageStock> {
             SizedBox(
               height: MediaQuery.of(context).size.height * 0.45,
               child: POSItemsTable(
-                items: items,
-                sellItems: () {},
-              ),
+              items: items,
+              sellItems: (){},
+              onQuantityChanged: (index, newQuantity) {
+                setState(() {
+                  items[index]["productQuantity"] = newQuantity;
+                });
+              },
+              onDelete: (index) {
+                setState(() {
+                  items.removeAt(index);
+                });
+              },
+            ),
             ),
           ],
         ),
