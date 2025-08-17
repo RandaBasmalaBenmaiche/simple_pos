@@ -34,10 +34,10 @@ class CustomPOSAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       backgroundColor: MyColors.mainColor,
       centerTitle: true,
-      toolbarHeight: 150,
+      toolbarHeight: MediaQuery.of(context).size.height,
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(150);
+  Size get preferredSize => const Size.fromHeight(100);
 }

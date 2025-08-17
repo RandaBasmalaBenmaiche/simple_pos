@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:simple_pos/components/button.dart';
-import 'package:simple_pos/components/dialog.dart';
 import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/pages/stock.dart';
 import 'package:simple_pos/pages/vendre.dart';
+import 'package:simple_pos/components/landingIconButton.dart';
+import 'package:simple_pos/components/priceDialog.dart';
+
+
 
 class Landing extends StatelessWidget {
   const Landing({super.key});
@@ -11,10 +13,17 @@ class Landing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+
+      //the custom app Bar
       appBar: const CustomPOSAppBar(showReturnButton: false),
+
+
       body: SizedBox(
       width: double.infinity,  
       height: double.infinity, 
+
+      //The three Icon buttons
+
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -24,9 +33,13 @@ class Landing extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                
+
+
+                //Price Icon button
                 MyIconButton(
                   onPressed: () {
-                    NumberInputDialog.show(
+                    PriceDialog.show(
                       context: context,
                       title: "ادخل الكود الخاص بالسلعة",
                       onSubmit: (_) {
@@ -39,15 +52,17 @@ class Landing extends StatelessWidget {
 
 
             
-            
-            MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => POSPage()),);
-}, imagePath: "assets/icons/sell.png", text: "بيع",),
+            //Sell Icon button
+            MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPage()),);}, imagePath: "assets/icons/sell.png", text: "بيع",),
               ],),
             ),
+
+
             Flexible(child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
-              children: [MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => POSPageStock()),);}, imagePath: "assets/icons/stock.png", text: "المخزن",),],
+              //Stock Icon button
+              children: [MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPageStock()),);}, imagePath: "assets/icons/stock.png", text: "المخزن",),],
             )),
           ],
         ),
