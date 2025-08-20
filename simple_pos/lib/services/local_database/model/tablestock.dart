@@ -1,33 +1,34 @@
+import 'dart:io';
 import 'package:simple_pos/services/local_database/dbFactory.dart';
 import 'package:simple_pos/services/local_database/dbTable.dart';
+import 'package:csv/csv.dart';
+import 'package:sqflite/sqflite.dart';
 
 
 class DStockTable extends DBBaseTable {
   @override
-  var db_table = 'Products_Stock';
+  var db_table = 'products_stock';
 
   static String sql_code = '''
   CREATE TABLE products_stock (
     id INTEGER PRIMARY KEY AUTOINCREMENT, 
     productName TEXT NOT NULL UNIQUE, 
     productPrice TEXT NOT NULL, 
+    productBuyingPrice TEXT NOT NULL,
     productCodeBar TEXT NOT NULL UNIQUE, 
     productQuantity TEXT NOT NULL
   );
   ''';
 
-
   /// Get product by code
   Future<Map<String, dynamic>?> getProductByCode(String codeBar) async {
     try {
       final database = await DBfactory.getDatabase();
-
       List<Map<String, dynamic>> results = await database.query(
         db_table,
         where: 'productCodeBar = ?',
         whereArgs: [codeBar],
       );
-
       return results.isNotEmpty ? results.first : null;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
@@ -39,13 +40,11 @@ class DStockTable extends DBBaseTable {
   Future<Map<String, dynamic>?> getProductByName(String name) async {
     try {
       final database = await DBfactory.getDatabase();
-
       List<Map<String, dynamic>> results = await database.query(
         db_table,
         where: 'productName = ?',
         whereArgs: [name],
       );
-
       return results.isNotEmpty ? results.first : null;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
@@ -59,17 +58,17 @@ class DStockTable extends DBBaseTable {
     String? newCodeBar,
     String? newName,
     String? newPrice,
+    String? newBuyingPrice,
     String? newQuantity,
   }) async {
     try {
       final database = await DBfactory.getDatabase();
-
       Map<String, dynamic> updatedFields = {};
       if (newCodeBar != null) updatedFields['productCodeBar'] = newCodeBar;
       if (newName != null) updatedFields['productName'] = newName;
       if (newPrice != null) updatedFields['productPrice'] = newPrice;
+      if (newBuyingPrice != null) updatedFields['productBuyingPrice'] = newBuyingPrice;
       if (newQuantity != null) updatedFields['productQuantity'] = newQuantity;
-
       if (updatedFields.isEmpty) return false;
 
       int count = await database.update(
@@ -78,7 +77,6 @@ class DStockTable extends DBBaseTable {
         where: 'productCodeBar = ?',
         whereArgs: [codeBar],
       );
-
       return count > 0;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
@@ -92,17 +90,17 @@ class DStockTable extends DBBaseTable {
     String? newCodeBar,
     String? newName,
     String? newPrice,
+    String? newBuyingPrice,
     String? newQuantity,
   }) async {
     try {
       final database = await DBfactory.getDatabase();
-
       Map<String, dynamic> updatedFields = {};
       if (newCodeBar != null) updatedFields['productCodeBar'] = newCodeBar;
       if (newName != null) updatedFields['productName'] = newName;
       if (newPrice != null) updatedFields['productPrice'] = newPrice;
+      if (newBuyingPrice != null) updatedFields['productBuyingPrice'] = newBuyingPrice;
       if (newQuantity != null) updatedFields['productQuantity'] = newQuantity;
-
       if (updatedFields.isEmpty) return false;
 
       int count = await database.update(
@@ -111,7 +109,6 @@ class DStockTable extends DBBaseTable {
         where: 'productName = ?',
         whereArgs: [currentName],
       );
-
       return count > 0;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
@@ -123,13 +120,11 @@ class DStockTable extends DBBaseTable {
   Future<bool> deleteProduct(String codeBar) async {
     try {
       final database = await DBfactory.getDatabase();
-
       int count = await database.delete(
         db_table,
         where: 'productCodeBar = ?',
         whereArgs: [codeBar],
       );
-
       return count > 0;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
@@ -141,13 +136,11 @@ class DStockTable extends DBBaseTable {
   Future<bool> deleteProductByName(String name) async {
     try {
       final database = await DBfactory.getDatabase();
-
       int count = await database.delete(
         db_table,
         where: 'productName = ?',
         whereArgs: [name],
       );
-
       return count > 0;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
@@ -155,4 +148,52 @@ class DStockTable extends DBBaseTable {
     }
   }
 
+  /// Import products from CSV file
+  Future<void> importFromCsv(File csvFile) async {
+    try {
+      final database = await DBfactory.getDatabase();
+      final content = await csvFile.readAsString();
+      List<List<dynamic>> rows = const CsvToListConverter().convert(content);
+
+      // Skip header row if present
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        await database.insert(
+          db_table,
+          {
+            'productName': row[0].toString(),
+            'productPrice': row[1].toString(),
+            'productBuyingPrice': row[2].toString(),
+            'productCodeBar': row[3].toString(),
+            'productQuantity': row[4].toString(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    } catch (e, stacktrace) {
+      print("Error importing CSV: $e --> $stacktrace");
+    }
+  }
+
+  /// Export products to CSV file
+  Future<void> exportToCsv(File csvFile) async {
+    try {
+      final database = await DBfactory.getDatabase();
+      final records = await database.query(db_table);
+      List<List<dynamic>> rows = [
+        ['productName','productPrice','productBuyingPrice','productCodeBar','productQuantity'],
+        ...records.map((r) => [
+          r['productName'],
+          r['productPrice'],
+          r['productBuyingPrice'],
+          r['productCodeBar'],
+          r['productQuantity'],
+        ])
+      ];
+      String csv = const ListToCsvConverter().convert(rows);
+      await csvFile.writeAsString(csv);
+    } catch (e, stacktrace) {
+      print("Error exporting CSV: $e --> $stacktrace");
+    }
+  }
 }

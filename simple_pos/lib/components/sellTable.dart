@@ -36,7 +36,7 @@ class POSItemsTable extends StatelessWidget {
           DataColumn2(label: Text("سعر الوحدة"), size: ColumnSize.M),
           DataColumn2(label: Text("الكمية"), size: ColumnSize.S),
           DataColumn2(label: Text("الاسم"), size: ColumnSize.L),
-          DataColumn2(label: Text("الكود"), size: ColumnSize.S),
+          DataColumn2(label: Text("الكود"), size: ColumnSize.L),
           DataColumn2(label: Text(""), size: ColumnSize.S), // delete column
         ],
         rows: List.generate(items.length, (index) {

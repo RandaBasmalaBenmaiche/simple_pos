@@ -5,10 +5,17 @@ import 'package:simple_pos/styles/my_colors.dart';
 
 Future<void> showAddProductDialog(
   BuildContext context,
-  void Function(String name, String price, String quantity, String code) onAdd,
+  void Function(
+    String name,
+    String price,
+    String buyingPrice,
+    String quantity,
+    String code,
+  ) onAdd,
 ) {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController priceController = TextEditingController();
+  final TextEditingController buyingPriceController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
   final TextEditingController codeController = TextEditingController();
 
@@ -27,8 +34,15 @@ Future<void> showAddProductDialog(
               _buildTextField(label: "اسم المنتج", controller: nameController),
               const SizedBox(height: 10),
               _buildTextField(
-                label: "ثمن المنتج",
+                label: "ثمن البيع",
                 controller: priceController,
+                keyboardType: TextInputType.number,
+                numbersOnly: true,
+              ),
+              const SizedBox(height: 10),
+              _buildTextField(
+                label: "سعر الشراء",
+                controller: buyingPriceController,
                 keyboardType: TextInputType.number,
                 numbersOnly: true,
               ),
@@ -63,9 +77,10 @@ Future<void> showAddProductDialog(
                       child: Text(
                         "إلغاء",
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 25,
-                            color: Colors.white),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 25,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
@@ -80,11 +95,13 @@ Future<void> showAddProductDialog(
                       // Prevent adding if any field is empty
                       if (nameController.text.isEmpty ||
                           priceController.text.isEmpty ||
+                          buyingPriceController.text.isEmpty ||
                           quantityController.text.isEmpty ||
                           codeController.text.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("الرجاء تعبئة جميع الحقول")),
+                            content: Text("الرجاء تعبئة جميع الحقول"),
+                          ),
                         );
                         return;
                       }
@@ -99,7 +116,8 @@ Future<void> showAddProductDialog(
                       if (existingProduct.isNotEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("الكود موجود بالفعل")),
+                            content: Text("الكود موجود بالفعل"),
+                          ),
                         );
                         return;
                       }
@@ -108,6 +126,7 @@ Future<void> showAddProductDialog(
                       onAdd(
                         nameController.text,
                         priceController.text,
+                        buyingPriceController.text,
                         quantityController.text,
                         codeController.text,
                       );
@@ -118,9 +137,10 @@ Future<void> showAddProductDialog(
                       child: Text(
                         "إضافة",
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 25,
-                            color: Colors.white),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 25,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),

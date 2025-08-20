@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:simple_pos/components/myAppBar.dart';
+import 'package:simple_pos/pages/history.dart';
 import 'package:simple_pos/pages/stock.dart';
 import 'package:simple_pos/pages/vendre.dart';
 import 'package:simple_pos/components/landingIconButton.dart';
@@ -59,10 +60,13 @@ class Landing extends StatelessWidget {
 
 
             Flexible(child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               crossAxisAlignment: CrossAxisAlignment.center,
               //Stock Icon button
-              children: [MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPageStock()),);}, imagePath: "assets/icons/stock.png", text: "المخزن",),],
+              children: [
+                MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPageStock()),);}, imagePath: "assets/icons/stock.png", text: "المخزن",),
+                MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPageHistorique()),);}, imagePath: "assets/icons/history.png", text: "تاريخ المبيعات",),
+                ],
             )),
           ],
         ),

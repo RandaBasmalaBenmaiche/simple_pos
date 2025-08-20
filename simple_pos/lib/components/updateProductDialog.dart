@@ -9,6 +9,7 @@ Future<void> showEditProductDialog(
   final TextEditingController newCodeController = TextEditingController(); // new code
   final TextEditingController nameController = TextEditingController();
   final TextEditingController priceController = TextEditingController();
+  final TextEditingController buyingPriceController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
 
   bool isLoaded = false;
@@ -46,8 +47,13 @@ Future<void> showEditProductDialog(
                         label: "اسم المنتج", controller: nameController),
                     const SizedBox(height: 10),
                     _buildTextField(
-                        label: "ثمن المنتج",
+                        label: "ثمن البيع",
                         controller: priceController,
+                        numbersOnly: true),
+                    const SizedBox(height: 10),
+                    _buildTextField(
+                        label: "سعر الشراء",
+                        controller: buyingPriceController,
                         numbersOnly: true),
                     const SizedBox(height: 10),
                     _buildTextField(
@@ -100,6 +106,8 @@ Future<void> showEditProductDialog(
                                     product['productName'];
                                 priceController.text =
                                     product['productPrice'];
+                                buyingPriceController.text =
+                                    product['productBuyingPrice'] ?? '';
                                 quantityController.text =
                                     product['productQuantity'];
                                 isLoaded = true;
@@ -133,6 +141,7 @@ Future<void> showEditProductDialog(
                             if (newCodeController.text.isEmpty ||
                                 nameController.text.isEmpty ||
                                 priceController.text.isEmpty ||
+                                buyingPriceController.text.isEmpty ||
                                 quantityController.text.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -146,6 +155,7 @@ Future<void> showEditProductDialog(
                               newCodeBar: newCodeController.text,
                               newName: nameController.text,
                               newPrice: priceController.text,
+                              newBuyingPrice: buyingPriceController.text,
                               newQuantity: quantityController.text,
                             );
 

@@ -11,14 +11,14 @@ class NumericInputField extends StatelessWidget {
   final FocusNode? focusNode; 
 
   const NumericInputField({
-    Key? key,
+    super.key,
     required this.controller,
     required this.label,
     this.expands = true,
     this.isAlphanumeric = false,
     this.defaultValue,
     this.focusNode,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
