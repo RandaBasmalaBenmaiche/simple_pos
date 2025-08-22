@@ -94,6 +94,7 @@ class PriceDialog {
                           onSubmitted: (_) async {
                             await confirm(); // trigger confirm on Enter in the text field
                           },
+                          context: context
                         ),
                       ],
 

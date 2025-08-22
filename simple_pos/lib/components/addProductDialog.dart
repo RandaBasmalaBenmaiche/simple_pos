@@ -31,7 +31,7 @@ Future<void> showAddProductDialog(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildTextField(label: "اسم المنتج", controller: nameController),
+              _buildTextField(label: "اسم المنتج", controller: nameController,context: context),
               const SizedBox(height: 10),
               _buildTextField(
                 label: "ثمن البيع",
@@ -46,6 +46,7 @@ Future<void> showAddProductDialog(
                 controller: buyingPriceController,
                 keyboardType: TextInputType.number,
                 numbersOnly: true,
+                context: context
               ),
               const SizedBox(height: 10),
               _buildTextField(
@@ -53,6 +54,7 @@ Future<void> showAddProductDialog(
                 controller: quantityController,
                 keyboardType: TextInputType.number,
                 numbersOnly: true,
+                context: context
               ),
               const SizedBox(height: 10),
               _buildTextField(
@@ -60,6 +62,7 @@ Future<void> showAddProductDialog(
                 controller: codeController,
                 keyboardType: TextInputType.number,
                 numbersOnly: true,
+                context: context
               ),
               const SizedBox(height: 20),
               Row(

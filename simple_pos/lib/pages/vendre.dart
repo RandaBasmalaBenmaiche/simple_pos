@@ -28,6 +28,7 @@ class _POSPageState extends State<POSPage> {
   final TextEditingController quantityController = TextEditingController();
   List<Map<String, dynamic>> items = [];
   double total = 0;
+ // double totalProfit = 0;
   final FocusNode codeFocusNode = FocusNode();
   final FocusNode quantityFocusNode = FocusNode();
   final FocusNode keyboardFocusNode = FocusNode();
@@ -94,6 +95,12 @@ void addItem(int store) async {
           sum + (double.tryParse(item['total'].toString()) ?? 0.0),
     );
 
+    //totalProfit = items.fold<double>(
+      //0.0,
+      //(sum, item) =>
+      //    sum + (( ((double.tryParse(item['productPrice'].toString())??0.0) - (double.tryParse(item['productBuyingPrice'].toString())??0.0)) * (double.tryParse(item['quantity'].toString())??0.0)  )),
+    //);
+
     setState(() {});
     codeFocusNode.requestFocus();
     return;
@@ -106,12 +113,14 @@ void addItem(int store) async {
     "productCodeBar": product['productCodeBar'],
     "productName": product['productName'],
     "productPrice": price.toStringAsFixed(2),
+    "productBuyingPrice": product['productBuyingPrice'],
     "productQuantity": quantity.toString(),
     "total": itemTotal.toStringAsFixed(2),
   };
   setState(() {
     items.add(item);
     total += itemTotal;
+    //totalProfit += itemTotal - (double.tryParse(item['productBuyingPrice'].toString())??0.0) * (double.tryParse(item['quantity'].toString())??0.0);
 
     codeController.clear();
     nameController.clear();
@@ -123,6 +132,7 @@ void addItem(int store) async {
 
 void sellItems(int store) async {
   if (items.isEmpty) return;
+  double totalProfit = 0;
 
   // 1. Insert invoice
   final invoiceId = await DInvoiceTable().custinsertRecord({
@@ -133,12 +143,14 @@ void sellItems(int store) async {
 
   // 2. Insert invoice items
   for (var item in items) {
+    totalProfit += (double.parse(item['productPrice']) - double.parse(item['productBuyingPrice']))*double.parse(item['productQuantity']);
     await DInvoiceItemsTable().insertRecord({
       "invoice_id": invoiceId,
       "productCodeBar": item['productCodeBar'],
       "productName": item['productName'],
       "quantity": int.parse(item['productQuantity']),
       "price": double.parse(item['productPrice']),
+      "profit": (double.parse(item['productPrice']) - double.parse(item['productBuyingPrice']))*double.parse(item['productQuantity']),
       "totalPrice": double.parse(item['total']),
     });
 
@@ -154,6 +166,12 @@ void sellItems(int store) async {
         newQuantity: newQuantity.toString(),
       );
     }
+
+    //4.inserting the profit
+  await DInvoiceTable().updateInvoice(
+  id: invoiceId??0,
+  profit: totalProfit,
+  );
   }
 
   // 4. Clear invoice

@@ -15,7 +15,9 @@ class DInvoiceTable extends DBBaseTable {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       store_id INTEGER NOT NULL,
       date TEXT NOT NULL,
-      total TEXT NOT NULL
+      total TEXT NOT NULL,
+      profit TEXT NOT NULL DEFAULT '0'
+
     );
   ''';
 
@@ -101,6 +103,32 @@ class DInvoiceTable extends DBBaseTable {
     }
     return null;
   }
+
+    /// Update invoice with new profit (or other fields)
+  Future<bool> updateInvoice({
+    required int id,
+    String? total,
+    double? profit,
+  }) async {
+    try {
+      final database = await DBfactory.getDatabase();
+      Map<String, dynamic> updatedFields = {};
+      if (total != null) updatedFields['total'] = total;
+      if (profit != null) updatedFields['profit'] = profit.toString();
+      if (updatedFields.isEmpty) return false;
+
+      int count = await database.update(
+        db_table,
+        updatedFields,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      return count > 0;
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+      return false;
+    }
+  }
 }
 
 
@@ -112,16 +140,17 @@ class DInvoiceItemsTable extends DBBaseTable {
   var db_table = 'invoice_items';
 
   static String sql_code = '''
-    CREATE TABLE invoice_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      invoice_id INTEGER NOT NULL,
-      productCodeBar TEXT NOT NULL,
-      productName TEXT NOT NULL,
-      quantity TEXT NOT NULL,
-      price TEXT NOT NULL,
-      totalPrice TEXT NOT NULL,
-      FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
-    );
+  CREATE TABLE invoice_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id INTEGER NOT NULL,
+    productCodeBar TEXT NOT NULL,
+    productName TEXT NOT NULL,
+    quantity TEXT NOT NULL,
+    price TEXT NOT NULL,
+    totalPrice TEXT NOT NULL,
+    profit TEXT NOT NULL,
+    FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+);
   ''';
 
   /// Get all items for a specific invoice

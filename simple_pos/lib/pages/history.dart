@@ -27,13 +27,28 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   List<int> months = [];
   List<int> days = [];
 
+   
+  bool _obscureText = true; 
+  bool _isAuth = false; 
+  double totalProfit = 0;
+
+
+
   Future<void> _loadInvoices(int store) async {
     final invoiceTable = DInvoiceTable();
     final data = await invoiceTable.getInvoices(store);
     setState(() {
+      totalProfit = 0;
       All_invoices = data;
       invoices = data;
+      print(data);
       _generateDateFilters();
+    for (var invoice in invoices) {
+    // Make sure the profit key exists and is numeric
+    if (invoice['profit'] != null) {
+      totalProfit += double.tryParse(invoice['profit'].toString()) ?? 0;
+    }
+  }
     });
   }
 
@@ -68,6 +83,14 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
 
         return true;
       }).toList();
+
+      totalProfit = 0; // reset
+      for (var invoice in invoices) {
+    // Make sure the profit key exists and is numeric
+    if (invoice['profit'] != null) {
+      totalProfit += double.tryParse(invoice['profit'].toString()) ?? 0;
+    }
+  }
     });
   }
 
@@ -75,7 +98,14 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
     final query = searchController.text.toLowerCase();
 
     if (query.isEmpty) {
+      totalProfit = 0;
       setState(() => invoices = List.from(All_invoices));
+   for (var invoice in invoices){
+    // Make sure the profit key exists and is numeric
+    if (invoice['profit'] != null) {
+      totalProfit += double.tryParse(invoice['profit'].toString()) ?? 0;
+    }
+     }
       return;
     }
 
@@ -83,8 +113,63 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
       final date = item['date'].toString().toLowerCase();
       return date.contains(query);
     }).toList();
+    totalProfit = 0;
+   for (var invoice in filtered) {
+    // Make sure the profit key exists and is numeric
+    if (invoice['profit'] != null) {
+      totalProfit += double.tryParse(invoice['profit'].toString()) ?? 0;
+    }
+  }
+  invoices = filtered;
 
-    setState(() => invoices = filtered);
+    setState(()=>{});
+  }
+
+ 
+
+  void _toggleVisibility() async {
+      if(_isAuth){
+        _isAuth = !_isAuth;
+        _obscureText = !_obscureText;
+        setState(() {});
+        return;
+      }
+      // show password dialog
+      String? password = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          TextEditingController passController = TextEditingController();
+          return AlertDialog(
+            title: const Text("Enter password"),
+            content: TextField(
+              controller: passController,
+              obscureText: true,
+              decoration: const InputDecoration(hintText: "Password"),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel")),
+              TextButton(
+                  onPressed: () => Navigator.pop(context, passController.text),
+                  child: const Text("OK")),
+            ],
+          );
+        },
+      );
+
+      // check password (replace '1234' with your real logic)
+      if (password == '1234') {
+        setState(() {
+          _obscureText = false;
+          _isAuth = !_isAuth;
+        });
+      } else if (password != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Wrong password")),
+        );
+      }
+    
   }
 
   @override
@@ -99,134 +184,177 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const CustomPOSAppBar(showReturnButton: true),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: searchController,
-              decoration: InputDecoration(
-                hintText: "ابحث",
-                filled: true,
-                fillColor: MyColors.secondColor(context),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  hintText: "ابحث",
+                  filled: true,
+                  fillColor: MyColors.secondColor(context),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: Icon(Icons.search, color: MyColors.mainColor(context)),
                 ),
-                prefixIcon: Icon(Icons.search, color: MyColors.mainColor(context)),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-
-          /// Dropdown Filters
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                SizedBox(height: 10, width: 10,),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    // Year Dropdown
-                    DropdownButton<int>(
-                      value: selectedYear,
-                      hint: const Text("السنة"),
-                      items: years.map((year) {
-                        return DropdownMenuItem(value: year, child: Text(year.toString()));
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() => selectedYear = value);
-                        _filterByDate();
-                      },
-                    ),
-                    // Month Dropdown
-                    DropdownButton<int>(
-                      value: selectedMonth,
-                      hint: const Text("الشهر"),
-                      items: months.map((month) {
-                        return DropdownMenuItem(value: month, child: Text(month.toString()));
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() => selectedMonth = value);
-                        _filterByDate();
-                      },
-                    ),
-                    // Day Dropdown
-                    DropdownButton<int>(
-                      value: selectedDay,
-                      hint: const Text("اليوم"),
-                      items: days.map((day) {
-                        return DropdownMenuItem(value: day, child: Text(day.toString()));
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() => selectedDay = value);
-                        _filterByDate();
-                      },
-                    ),
-                  ],
+            const SizedBox(height: 10),
+        
+            /// Dropdown Filters
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                Container(
+                decoration: BoxDecoration(
+                color: MyColors.secondColor(context),
+                borderRadius: BorderRadius.circular(15),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          /// Invoices List
-          (invoices.isNotEmpty)
-              ? Flexible(
-                  child: ListView.builder(
-                    itemCount: invoices.length,
-                    itemBuilder: (context, index) {
-                      final invoice = invoices[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: ExpansionTile(
-                          title: Text(
-                            "فاتورة #${invoice['id']} - ${invoice['date']}",
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text("المجموع: ${invoice['total']} DA"),
-                          children: [
-                            FutureBuilder<List<Map<String, dynamic>>>(
-                              future: DInvoiceItemsTable().getItemsByInvoiceId(invoice['id']),
-                              builder: (context, snapshot) {
-                                if (!snapshot.hasData) {
-                                  return const Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: CircularProgressIndicator(),
-                                  );
-                                }
-
-                                final items = snapshot.data!;
-                                if (items.isEmpty) {
-                                  return const Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: Text("لا توجد منتجات في هذه الفاتورة"),
-                                  );
-                                }
-
-                                return Column(
-                                  children: items.map((item) {
-                                    return ListTile(
-                                      title: Text("${item['productName']}"),
-                                      subtitle: Text(
-                                          "الكود: ${item['productCodeBar']} - الكمية: ${item['quantity']}"),
-                                      trailing: Text("${item['totalPrice']} DA"),
-                                    );
-                                  }).toList(),
-                                );
-                              },
-                            ),
-                          ],
+                child: SizedBox(
+                  height: 50,
+                  width: 300,
+                  child: Row(
+                    children: [
+                    const Text(" دج ", style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),),
+                    Expanded(
+                        child: TextField(
+                        readOnly: true, // user cannot edit
+                        obscureText: _obscureText,
+                        controller: TextEditingController(
+                            text: totalProfit.toStringAsFixed(2)),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                    },
+                        decoration: const InputDecoration(border: InputBorder.none),),
+                      ),
+                      const Text(" الربح الكلي: ", style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),),
+                SizedBox(height: 10, width: 10,),
+                IconButton(icon: Icon(
+                  _obscureText ? Icons.visibility : Icons.visibility_off,
+                  size: 30,
+                ),
+                onPressed: _toggleVisibility,
+              ),
+                      
+                    ],
                   ),
-                )
-              : const Center(child: Text("لا توجد فواتير حتى الآن")),
-        ],
+                ),),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      // Year Dropdown
+                      DropdownButton<int>(
+                        value: selectedYear,
+                        hint: const Text("السنة"),
+                        items: years.map((year) {
+                          return DropdownMenuItem(value: year, child: Text(year.toString()));
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => selectedYear = value);
+                          _filterByDate();
+                        },
+                      ),
+                      // Month Dropdown
+                      DropdownButton<int>(
+                        value: selectedMonth,
+                        hint: const Text("الشهر"),
+                        items: months.map((month) {
+                          return DropdownMenuItem(value: month, child: Text(month.toString()));
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => selectedMonth = value);
+                          _filterByDate();
+                        },
+                      ),
+                      // Day Dropdown
+                      DropdownButton<int>(
+                        value: selectedDay,
+                        hint: const Text("اليوم"),
+                        items: days.map((day) {
+                          return DropdownMenuItem(value: day, child: Text(day.toString()));
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => selectedDay = value);
+                          _filterByDate();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+        
+            /// Invoices List
+            (invoices.isNotEmpty)
+                ? Flexible(
+                    child: ListView.builder(
+                      itemCount: invoices.length,
+                      itemBuilder: (context, index) {
+                        final invoice = invoices[index];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: ExpansionTile(
+                            title: Text(
+                              "فاتورة #${invoice['id']} - ${invoice['date']}",
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text("المجموع: ${invoice['total']} DA"),
+                            children: [
+                              FutureBuilder<List<Map<String, dynamic>>>(
+                                future: DInvoiceItemsTable().getItemsByInvoiceId(invoice['id']),
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) {
+                                    return const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  }
+        
+                                  final items = snapshot.data!;
+                                  if (items.isEmpty) {
+                                    return const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: Text("لا توجد منتجات في هذه الفاتورة"),
+                                    );
+                                  }
+        
+                                  return Column(
+                                    children: items.map((item) {
+                                      return ListTile(
+                                        title: Text("${item['productName']}"),
+                                        subtitle: Text(
+                                            "الكود: ${item['productCodeBar']} - الكمية: ${item['quantity']}"),
+                                        trailing: Text("${item['totalPrice']} DA"),
+                                      );
+                                    }).toList(),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                : const Center(child: Text("لا توجد فواتير حتى الآن")),
+          ],
+        ),
       ),
     );
   }

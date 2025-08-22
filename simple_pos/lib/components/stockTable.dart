@@ -105,7 +105,7 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
           fontSize: 20,
         ),
         dataRowColor: MaterialStateProperty.all(MyColors.secondColor(context)),
-        dataRowHeight: 100,
+        dataRowHeight: 60,
         columnSpacing: 12,
         horizontalMargin: 12,
         minWidth: 700,
@@ -114,7 +114,7 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
           DataColumn2(label: Text("سعر الوحدة"), size: ColumnSize.S),
           DataColumn2(label: Text("الكمية"), size: ColumnSize.S),
           DataColumn2(label: Text("الاسم"), size: ColumnSize.L),
-          DataColumn2(label: Text("الكود"), size: ColumnSize.L),
+          DataColumn2(label: Text("الكود"), size: ColumnSize.M),
           DataColumn2(label: Text(""), size: ColumnSize.S), // actions column
         ],
         rows: List.generate(widget.items.length, (index) {
