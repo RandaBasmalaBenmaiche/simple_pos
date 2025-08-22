@@ -71,7 +71,7 @@ class SuggestionInputField extends StatelessWidget {
               borderSide: const BorderSide(color: Colors.transparent),
             ),
             filled: true,
-            fillColor: MyColors.secondColor,
+            fillColor: MyColors.secondColor(context),
             labelStyle: const TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 20,

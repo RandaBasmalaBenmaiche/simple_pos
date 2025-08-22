@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For FilteringTextInputFormatter
+import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 
 Future<void> showEditProductDialog(
     BuildContext context, VoidCallback onUpdate) async {
@@ -11,6 +14,8 @@ Future<void> showEditProductDialog(
   final TextEditingController priceController = TextEditingController();
   final TextEditingController buyingPriceController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
+  final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
+  
 
   bool isLoaded = false;
   bool isCodeEditable = true; // old code editable at first
@@ -34,6 +39,7 @@ Future<void> showEditProductDialog(
                     controller: codeController,
                     enabled: isCodeEditable,
                     numbersOnly: true,
+                    context: context
                   ),
                   const SizedBox(height: 10),
 
@@ -41,6 +47,7 @@ Future<void> showEditProductDialog(
                     _buildTextField(
                         label: "كود المنتج الجديد",
                         controller: newCodeController,
+                        context: context,
                         numbersOnly: true),
                     const SizedBox(height: 10),
                     _buildTextField(
@@ -86,7 +93,7 @@ Future<void> showEditProductDialog(
                       if (!isLoaded)
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: MyColors.mainColor,
+                            backgroundColor: MyColors.mainColor(context),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                           ),
@@ -132,7 +139,7 @@ Future<void> showEditProductDialog(
                       else
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: MyColors.mainColor,
+                            backgroundColor: MyColors.mainColor(context),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                           ),
@@ -157,6 +164,7 @@ Future<void> showEditProductDialog(
                               newPrice: priceController.text,
                               newBuyingPrice: buyingPriceController.text,
                               newQuantity: quantityController.text,
+                              storeId: store
                             );
 
                             if (success) {
@@ -200,7 +208,10 @@ Widget _buildTextField({
   TextInputType keyboardType = TextInputType.text,
   bool enabled = true,
   bool numbersOnly = false,
+  context
 }) {
+
+
   return TextField(
     controller: controller,
     keyboardType: keyboardType,
@@ -215,7 +226,7 @@ Widget _buildTextField({
         borderSide: BorderSide.none,
       ),
       filled: true,
-      fillColor: MyColors.secondColor,
+      fillColor:MyColors.secondColor(context),
     ),
   );
 }

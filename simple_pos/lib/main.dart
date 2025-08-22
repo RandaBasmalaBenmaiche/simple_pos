@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:simple_pos/pages/landing.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,7 +17,12 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  runApp(const MainApp());
+      runApp(
+        BlocProvider(
+          create: (_) => StoreCubit(),
+          child: const MainApp(),
+        ),
+      );
 }
 
 class MainApp extends StatelessWidget {

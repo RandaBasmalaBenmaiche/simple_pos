@@ -98,13 +98,14 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: DataTable2(
-        headingRowColor: MaterialStateProperty.all(MyColors.mainColor),
+        headingRowColor: MaterialStateProperty.all(MyColors.mainColor(context)),
         headingTextStyle: const TextStyle(
           fontWeight: FontWeight.bold,
           color: Colors.white,
           fontSize: 20,
         ),
-        dataRowColor: MaterialStateProperty.all(MyColors.secondColor),
+        dataRowColor: MaterialStateProperty.all(MyColors.secondColor(context)),
+        dataRowHeight: 100,
         columnSpacing: 12,
         horizontalMargin: 12,
         minWidth: 700,

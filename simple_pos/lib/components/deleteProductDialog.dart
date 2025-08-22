@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 
 Future<void> showDeleteProductDialog(
     BuildContext context, VoidCallback onUpdate) async {
   final TextEditingController codeController = TextEditingController();
+  final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
+
 
   bool isLoaded = false; // to mimic "Next" loading style
 
@@ -28,6 +33,7 @@ Future<void> showDeleteProductDialog(
                     controller: codeController,
                     enabled: !isLoaded, // freeze after next
                     numbersOnly: true, // accept only digits
+                    context: context,
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -54,7 +60,7 @@ Future<void> showDeleteProductDialog(
                       if (!isLoaded)
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: MyColors.mainColor,
+                            backgroundColor: MyColors.mainColor(context),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                           ),
@@ -95,7 +101,7 @@ Future<void> showDeleteProductDialog(
                       else
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: MyColors.mainColor,
+                            backgroundColor: MyColors.mainColor(context),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                           ),
@@ -107,7 +113,7 @@ Future<void> showDeleteProductDialog(
                               return;
                             }
 
-                            bool success = await DStockTable().deleteProduct(code);
+                            bool success = await DStockTable().deleteProduct(code,store);
 
                             Navigator.pop(context);
 
@@ -152,6 +158,7 @@ Widget _buildTextField({
   TextInputType keyboardType = TextInputType.text,
   bool enabled = true,
   bool numbersOnly = false,
+  context
 }) {
   return TextField(
     controller: controller,
@@ -166,7 +173,7 @@ Widget _buildTextField({
         borderSide: BorderSide.none,
       ),
       filled: true,
-      fillColor: MyColors.secondColor,
+      fillColor: MyColors.secondColor(context),
     ),
   );
 }

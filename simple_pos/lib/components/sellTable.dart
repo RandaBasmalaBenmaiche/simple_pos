@@ -21,13 +21,14 @@ class POSItemsTable extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: DataTable2(
-        headingRowColor: MaterialStateProperty.all(MyColors.mainColor),
+        headingRowColor: MaterialStateProperty.all(MyColors.mainColor(context)),
         headingTextStyle: const TextStyle(
           fontWeight: FontWeight.bold,
           color: Colors.white,
           fontSize: 20,
         ),
-        dataRowColor: MaterialStateProperty.all(MyColors.secondColor),
+        dataRowColor: MaterialStateProperty.all(MyColors.secondColor(context)),
+        dataRowHeight: 100,
         columnSpacing: 12,
         horizontalMargin: 12,
         minWidth: 700,
@@ -42,7 +43,8 @@ class POSItemsTable extends StatelessWidget {
         rows: List.generate(items.length, (index) {
           final item = items[index];
 
-          return DataRow(
+          return 
+          DataRow(
             cells: [
               DataCell(Text(item['total'],
                   style: const TextStyle(

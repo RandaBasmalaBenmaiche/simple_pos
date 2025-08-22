@@ -38,6 +38,7 @@ Future<void> showAddProductDialog(
                 controller: priceController,
                 keyboardType: TextInputType.number,
                 numbersOnly: true,
+                context: context
               ),
               const SizedBox(height: 10),
               _buildTextField(
@@ -86,7 +87,7 @@ Future<void> showAddProductDialog(
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: MyColors.mainColor,
+                      backgroundColor: MyColors.mainColor(context),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -159,6 +160,7 @@ Widget _buildTextField({
   required TextEditingController controller,
   TextInputType keyboardType = TextInputType.text,
   bool numbersOnly = false,
+  context,
 }) {
   return TextField(
     controller: controller,
@@ -173,7 +175,7 @@ Widget _buildTextField({
         borderSide: BorderSide.none,
       ),
       filled: true,
-      fillColor: MyColors.secondColor,
+      fillColor: MyColors.secondColor(context),
     ),
   );
 }

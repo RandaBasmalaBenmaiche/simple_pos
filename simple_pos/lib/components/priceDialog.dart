@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 
 
 
@@ -15,6 +18,7 @@ class PriceDialog {
 
     final TextEditingController codeController = TextEditingController();
     final FocusNode codeFocusNode = FocusNode();
+    final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
     String? productName;
     String? productPrice;
     bool isSubmitted = false;
@@ -47,6 +51,7 @@ class PriceDialog {
                   isSubmitted = true;
                 },
                 onSubmit,
+                store,
               );
             }
 
@@ -72,7 +77,7 @@ class PriceDialog {
                         style: TextStyle(
                           fontSize: 30,
                           fontWeight: FontWeight.bold,
-                          color: MyColors.mainColor,
+                          color: MyColors.mainColor(context),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -98,14 +103,17 @@ class PriceDialog {
                           label: "اسم المنتج",
                           controller: TextEditingController(text: productName ?? ''),
                           readOnly: true,
-                          fillColor: MyColors.secondColor,
+                          fillColor: MyColors.secondColor(context),
+                          context: context,
+                          
                         ),
                         const SizedBox(height: 10),
                         _buildTextField(
                           label: "ثمن المنتج",
                           controller: TextEditingController(text: productPrice ?? ''),
                           readOnly: true,
-                          fillColor: MyColors.secondColor,
+                          fillColor: MyColors.secondColor(context),
+                          context: context
                         ),
                       ],
 
@@ -136,7 +144,7 @@ class PriceDialog {
                             const SizedBox(width: 20),
                             if(!isSubmitted)ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: MyColors.mainColor,
+                                backgroundColor: MyColors.mainColor(context),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -176,10 +184,11 @@ static Future<void> _handleConfirm(
   void Function(void Function()) setState,
   void Function(String?, String?) onProductLoaded,
   Function(dynamic) onSubmit,
+  store,
 ) async {
   if (controller.text.isEmpty) return;
 
-  final product = await DStockTable().getProductByCode(controller.text);
+  final product = await DStockTable().getProductByCode(controller.text,store);
 
   if (product == null) {
     if (context.mounted) {
@@ -213,10 +222,12 @@ static Future<void> _handleConfirm(
     Function(String)? onSubmitted,
     Color? fillColor,
     TextInputAction? textInputAction,
+    context
   }) {
     return TextField(
       controller: controller,
       focusNode: focusNode,
+      style: const TextStyle(fontSize: 45, fontWeight: FontWeight.w400),
       onSubmitted: onSubmitted,
       keyboardType: numbersOnly ? TextInputType.number : TextInputType.text,
       textInputAction: textInputAction ?? TextInputAction.next,
@@ -227,14 +238,15 @@ static Future<void> _handleConfirm(
         labelText: label,
         labelStyle: const TextStyle(
           fontWeight: FontWeight.bold,
-          fontSize: 20,
+          fontSize: 30,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
         filled: true,
-        fillColor: fillColor ?? MyColors.secondColor,
+        fillColor: fillColor ?? MyColors.secondColor(context),
+      
       ),
     );
   }

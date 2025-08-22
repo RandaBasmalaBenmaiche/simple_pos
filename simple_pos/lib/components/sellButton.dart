@@ -16,7 +16,7 @@ class CustomActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton(
       style: ButtonStyle(
-        backgroundColor: MaterialStateProperty.all(MyColors.secondColor),
+        backgroundColor: MaterialStateProperty.all(MyColors.secondColor(context)),
       ),
       onPressed: onPressed,
       child: Padding(

@@ -9,26 +9,29 @@ class DInvoiceTable extends DBBaseTable {
   @override
   var db_table = 'invoices';
 
-  // Create table SQL
+  // Updated table SQL
   static String sql_code = '''
     CREATE TABLE invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id INTEGER NOT NULL,
       date TEXT NOT NULL,
       total TEXT NOT NULL
     );
   ''';
 
-  /// Insert a new invoice and its items
+  /// Insert a new invoice with items for a specific store
   Future<int?> insertInvoice({
+    required int storeId,
     required String date,
     required String total,
-    required List<Map<String, dynamic>> items, // list of products
+    required List<Map<String, dynamic>> items,
   }) async {
     try {
       final database = await DBfactory.getDatabase();
 
-      // Insert invoice and get the inserted id
+      // Insert invoice with store_id
       int invoiceId = await database.insert(db_table, {
+        'store_id': storeId,
         'date': date,
         'total': total,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -41,6 +44,7 @@ class DInvoiceTable extends DBBaseTable {
           'productCodeBar': item['productCodeBar'],
           'productName': item['productName'],
           'quantity': item['quantity'],
+          'price': item['price'],
           'totalPrice': item['totalPrice'],
         });
       }
@@ -52,11 +56,16 @@ class DInvoiceTable extends DBBaseTable {
     }
   }
 
-  /// Get all invoices
-  Future<List<Map<String, dynamic>>> getInvoices() async {
+  /// Get all invoices for a specific store
+  Future<List<Map<String, dynamic>>> getInvoices(int storeId) async {
     try {
       final database = await DBfactory.getDatabase();
-      return await database.query(db_table, orderBy: 'id DESC');
+      return await database.query(
+        db_table,
+        where: 'store_id = ?',
+        whereArgs: [storeId],
+        orderBy: 'id DESC',
+      );
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return [];
@@ -76,25 +85,24 @@ class DInvoiceTable extends DBBaseTable {
     }
   }
 
-Future<int?> custinsertRecord(Map<String, dynamic> data) async {
-  try {
-    final database = await DBfactory.getDatabase();
-    // Insert and get the row ID
-    int id = await database.insert(
-      db_table,
-      data,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-    print("inserted:\t");
-    print(data.toString());
-    return id; // return the inserted row ID
-  } catch (e, stacktrace) {
-    print('$e --> $stacktrace');
+  /// Insert custom record (with storeId)
+  Future<int?> custinsertRecord(Map<String, dynamic> data) async {
+    try {
+      final database = await DBfactory.getDatabase();
+      int id = await database.insert(
+        db_table,
+        data,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      print("inserted:\t$data");
+      return id;
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+    }
+    return null;
   }
-  return null; // return null on failure
 }
 
-}
 
 // ==========================
 // Invoice Items Table
@@ -141,3 +149,4 @@ class DInvoiceItemsTable extends DBBaseTable {
     }
   }
 }
+

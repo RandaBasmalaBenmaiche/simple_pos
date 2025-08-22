@@ -19,7 +19,7 @@ class MyIconButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: onPressed,
       style: ButtonStyle(
-        backgroundColor: MaterialStateProperty.all(MyColors.secondColor),
+        backgroundColor: MaterialStateProperty.all(MyColors.secondColor(context)),
         fixedSize: MaterialStateProperty.all(
           Size(
             MediaQuery.of(context).size.width * 0.25,

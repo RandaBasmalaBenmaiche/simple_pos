@@ -7,8 +7,11 @@ import 'package:simple_pos/components/addProductDialog.dart';
 import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/components/stockTable.dart';
 import 'package:simple_pos/components/updateProductDialog.dart';
+import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 
 class POSPageStock extends StatefulWidget {
   const POSPageStock({Key? key}) : super(key: key);
@@ -25,7 +28,8 @@ class _POSPageState extends State<POSPageStock> {
   @override
   void initState() {
     super.initState();
-    _loadItems();
+    final currentStoreId = BlocProvider.of<StoreCubit>(context, listen: false).state;
+    _loadItems(currentStoreId);
     searchController.addListener(_onSearchChanged);
   }
 
@@ -36,8 +40,8 @@ class _POSPageState extends State<POSPageStock> {
     super.dispose();
   }
 
-  Future<void> _loadItems() async {
-    final rawItems = await DStockTable().getRecords();
+  Future<void> _loadItems(int store) async {
+    final rawItems = await DStockTable().getProductsByStore(store);
     final loadedItems = rawItems.map((item) {
       return {
         ...item,
@@ -69,7 +73,7 @@ class _POSPageState extends State<POSPageStock> {
   }
 
   // ================= Import CSV =================
-  Future<void> importProductsFromCSV() async {
+  Future<void> importProductsFromCSV(int store) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
@@ -84,6 +88,7 @@ class _POSPageState extends State<POSPageStock> {
       for (var i = 1; i < csvTable.length; i++) {
         var row = csvTable[i];
         await DStockTable().insertRecord({
+          'store_id': store,
           'productName': row[0].toString(),
           'productPrice': row[1].toString(),
           'productBuyingPrice': row[2].toString(),
@@ -92,7 +97,7 @@ class _POSPageState extends State<POSPageStock> {
         });
       }
 
-      await _loadItems();
+      await _loadItems(store);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم استيراد المنتجات بنجاح')),
       );
@@ -142,6 +147,7 @@ class _POSPageState extends State<POSPageStock> {
 
   @override
   Widget build(BuildContext context) {
+    final store = context.watch<StoreCubit>().state;
     return Scaffold(
       appBar: const CustomPOSAppBar(showReturnButton: true),
       body: Padding(
@@ -157,12 +163,12 @@ class _POSPageState extends State<POSPageStock> {
                     decoration: InputDecoration(
                       hintText: "ابحث بالكود أو الاسم",
                       filled: true,
-                      fillColor: MyColors.secondColor,
+                      fillColor: MyColors.secondColor(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
-                      prefixIcon: Icon(Icons.search, color: MyColors.mainColor),
+                      prefixIcon: Icon(Icons.search, color: MyColors.secondColor(context)),
                     ),
                   ),
                 ),
@@ -181,12 +187,13 @@ class _POSPageState extends State<POSPageStock> {
                       showAddProductDialog(context, (name, price, buyingPrice, quantity, code) async {
                         await DStockTable().insertRecord({
                           "productName": name,
+                          "store_id":store,
                           "productPrice": price,
                           "productQuantity": quantity,
                           "productCodeBar": code,
                           "productBuyingPrice": buyingPrice,
                         });
-                        await _loadItems();
+                        await _loadItems(store);
                       });
                     },
                   ),
@@ -195,7 +202,7 @@ class _POSPageState extends State<POSPageStock> {
                     text: "تغيير السلع",
                     onPressed: () async {
                       await showEditProductDialog(context, () async {
-                        await _loadItems();
+                        await _loadItems(store);
                       });
                     },
                   ),
@@ -203,7 +210,7 @@ class _POSPageState extends State<POSPageStock> {
                   CustomActionButton(
                     text: "استيراد CSV",
                     onPressed: () async {
-                      await importProductsFromCSV();
+                      await importProductsFromCSV(store);
                     },
                   ),
                   const SizedBox(width: 10),
@@ -238,6 +245,7 @@ class _POSPageState extends State<POSPageStock> {
                     await DStockTable().updateProduct(
                       codeBar: product['productCodeBar'],
                       newQuantity: newQuantity.toString(),
+                      storeId: store
                     );
                   },
                   onDelete: (index) async {
@@ -265,7 +273,7 @@ class _POSPageState extends State<POSPageStock> {
 
                     if (confirm == true) {
                       final product = items[index];
-                      await DStockTable().deleteProduct(product['productCodeBar']);
+                      await DStockTable().deleteProduct(product['productCodeBar'],store);
 
                       setState(() {
                         items.removeAt(index);

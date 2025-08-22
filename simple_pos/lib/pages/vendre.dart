@@ -8,9 +8,12 @@ import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/components/alphaNumericInputField.dart';
 import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/components/sellTable.dart';
+import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tableinvoice.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart'; 
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 
 class POSPage extends StatefulWidget {
   const POSPage({Key? key}) : super(key: key);
@@ -30,7 +33,7 @@ class _POSPageState extends State<POSPage> {
   final FocusNode keyboardFocusNode = FocusNode();
    List<String> allItems = [];
 
-void addItem() async {
+void addItem(int store) async {
   String codeInput = codeController.text.trim();
   String nameInput = nameController.text.trim();
   int quantity = int.tryParse(quantityController.text) ?? 0;
@@ -44,9 +47,9 @@ void addItem() async {
 
   // Priority: code first, fallback to name
   if (codeInput.isNotEmpty) {
-    product = await DStockTable().getProductByCode(codeInput);
+    product = await DStockTable().getProductByCode(codeInput,store);
   } else if (nameInput.isNotEmpty) {
-    product = await DStockTable().getProductByName(nameInput);
+    product = await DStockTable().getProductByName(nameInput,store);
   }
 
   if (product == null) {
@@ -118,11 +121,12 @@ void addItem() async {
   });
 }
 
-void sellItems() async {
+void sellItems(int store) async {
   if (items.isEmpty) return;
 
   // 1. Insert invoice
   final invoiceId = await DInvoiceTable().custinsertRecord({
+    "store_id": store,
     "date": DateTime.now().toIso8601String(),
     "total": total,
   });
@@ -139,13 +143,14 @@ void sellItems() async {
     });
 
     // 3. Update stock
-    final product = await DStockTable().getProductByCode(item['productCodeBar']);
+    final product = await DStockTable().getProductByCode(item['productCodeBar'],store);
     if (product != null) {
       int currentQuantity = int.tryParse(product['productQuantity'].toString()) ?? 0;
       int newQuantity = currentQuantity - int.parse(item['productQuantity']);
       if (newQuantity < 0) newQuantity = 0;
       await DStockTable().updateProduct(
         codeBar: product['productCodeBar'],
+        storeId: store,
         newQuantity: newQuantity.toString(),
       );
     }
@@ -196,6 +201,7 @@ void sellItems() async {
 
   @override
   Widget build(BuildContext context) {
+    final currentStoreId = context.watch<StoreCubit>().state;
     return Scaffold(
       appBar: const CustomPOSAppBar(showReturnButton: true),
       body: RawKeyboardListener(
@@ -203,7 +209,7 @@ void sellItems() async {
         onKey: (RawKeyEvent event) {
           if (event is RawKeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.enter) {
-            addItem();
+            addItem(currentStoreId);
             keyboardFocusNode.unfocus();
             Future.delayed(const Duration(milliseconds: 50), () {
               FocusScope.of(context).requestFocus(codeFocusNode);
@@ -234,7 +240,7 @@ void sellItems() async {
                   const SizedBox(width: 16),
                   CustomActionButton(
                     text: "اضافة للمشتريات",
-                    onPressed: addItem,
+                    onPressed: ()=>addItem(currentStoreId),
                   ),
 
                 ],
@@ -245,7 +251,7 @@ void sellItems() async {
                   height: MediaQuery.of(context).size.height * 0.6,
                   child: POSItemsTable(
                     items: items,
-                    sellItems: sellItems,
+                    sellItems: ()=>sellItems(currentStoreId),
                     onQuantityChanged: (index, newQuantity) {
                       setState(() {
                         items[index]["productQuantity"] = newQuantity;
@@ -276,7 +282,7 @@ void sellItems() async {
                   children: [
                     Container(
                       decoration: BoxDecoration(
-                        color: MyColors.secondColor,
+                        color: MyColors.secondColor(context),
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Text(
@@ -289,7 +295,7 @@ void sellItems() async {
                     ),
                     CustomActionButton(
                       text: "بيع",
-                      onPressed: sellItems,
+                      onPressed: ()=>sellItems(currentStoreId),
                     ),
                   ],
                 ),
