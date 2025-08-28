@@ -133,13 +133,16 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                   ),
                 ),
               ),
-              DataCell(Text(
-                item['productPrice'],
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
+              DataCell(
+                Text(
+                  double.tryParse(item['productPrice'].toString())?.toStringAsFixed(2) ?? '0.00',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
                 ),
-              )),
+              ),
+
               DataCell(
                 SizedBox(
                   width: 60,

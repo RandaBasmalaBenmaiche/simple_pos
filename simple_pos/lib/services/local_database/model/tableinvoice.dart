@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:simple_pos/services/local_database/dbFactory.dart';
 import 'package:simple_pos/services/local_database/dbTable.dart';
 
+
 // ==========================
 // Invoice Table (summary)
 // ==========================
@@ -14,10 +15,11 @@ class DInvoiceTable extends DBBaseTable {
     CREATE TABLE invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       store_id INTEGER NOT NULL,
+      customer_id INTEGER,
+      customer_name TEXT,
       date TEXT NOT NULL,
       total TEXT NOT NULL,
       profit TEXT NOT NULL DEFAULT '0'
-
     );
   ''';
 
@@ -26,14 +28,18 @@ class DInvoiceTable extends DBBaseTable {
     required int storeId,
     required String date,
     required String total,
+    String? customerName,
+    int? customerId,
     required List<Map<String, dynamic>> items,
   }) async {
     try {
       final database = await DBfactory.getDatabase();
 
-      // Insert invoice with store_id
+      // Insert invoice with store_id, customer details
       int invoiceId = await database.insert(db_table, {
         'store_id': storeId,
+        'customer_id': customerId,
+        'customer_name': customerName,
         'date': date,
         'total': total,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -47,6 +53,7 @@ class DInvoiceTable extends DBBaseTable {
           'productName': item['productName'],
           'quantity': item['quantity'],
           'price': item['price'],
+          'profit': item['profit'],
           'totalPrice': item['totalPrice'],
         });
       }
@@ -104,17 +111,22 @@ class DInvoiceTable extends DBBaseTable {
     return null;
   }
 
-    /// Update invoice with new profit (or other fields)
+  /// Update invoice with new profit (or other fields)
   Future<bool> updateInvoice({
     required int id,
     String? total,
     double? profit,
+    String? customerName,
+    int? customerId,
   }) async {
     try {
       final database = await DBfactory.getDatabase();
       Map<String, dynamic> updatedFields = {};
       if (total != null) updatedFields['total'] = total;
       if (profit != null) updatedFields['profit'] = profit.toString();
+      if (customerName != null) updatedFields['customer_name'] = customerName;
+      if (customerId != null) updatedFields['customer_id'] = customerId;
+
       if (updatedFields.isEmpty) return false;
 
       int count = await database.update(
@@ -130,7 +142,6 @@ class DInvoiceTable extends DBBaseTable {
     }
   }
 }
-
 
 // ==========================
 // Invoice Items Table
@@ -150,7 +161,7 @@ class DInvoiceItemsTable extends DBBaseTable {
     totalPrice TEXT NOT NULL,
     profit TEXT NOT NULL,
     FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
-);
+  );
   ''';
 
   /// Get all items for a specific invoice
@@ -178,4 +189,5 @@ class DInvoiceItemsTable extends DBBaseTable {
     }
   }
 }
+
 

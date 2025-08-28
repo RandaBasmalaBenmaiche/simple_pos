@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
+import 'package:simple_pos/services/local_database/model/tabledebt.dart';
 import 'package:simple_pos/services/local_database/model/tableinvoice.dart';
 import 'package:simple_pos/services/local_database/model/tablestores.dart';
 import 'package:sqflite/sqflite.dart';
@@ -8,11 +10,11 @@ import 'package:path/path.dart';
 
 
 class DBfactory {
-  static const _database_name = " POS_DB_gain_stores.db";
+  static const _database_name = " POS_test_.db";
   static const _database_version = 1;
   static var database;
 
-  static List<String> sql_codes = [DStoresTable.sql_code , DStoresTable.sql_code_create ,DStockTable.sql_code, DInvoiceTable.sql_code , DInvoiceItemsTable.sql_code];
+  static List<String> sql_codes = [DStoresTable.sql_code , DStoresTable.sql_code_create ,DStockTable.sql_code, DCustomersTable.sql_code, DDebtPaymentsTable.sql_code ,DInvoiceTable.sql_code , DInvoiceItemsTable.sql_code];
   static Future<Database> getDatabase() async {
 
     if (database != null) {

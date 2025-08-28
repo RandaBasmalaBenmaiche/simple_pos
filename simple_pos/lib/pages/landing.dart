@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/components/storeSwitchToggle.dart';
+import 'package:simple_pos/pages/customers.dart';
 import 'package:simple_pos/pages/history.dart';
 import 'package:simple_pos/pages/stock.dart';
 import 'package:simple_pos/pages/vendre.dart';
@@ -59,6 +60,8 @@ class Landing extends StatelessWidget {
                   
                   //Sell Icon button
                   MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPage()),);}, imagePath: "assets/icons/sell.png", text: "بيع",),
+
+                  MyIconButton(onPressed: (){Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPageCustomers()),);}, imagePath: "assets/icons/customers.png", text: "الزبائن",),
                     ],),
                   ),
               

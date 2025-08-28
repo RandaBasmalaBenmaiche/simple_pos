@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:intl/intl.dart';
 
-class CustomPOSAppBar extends StatelessWidget implements PreferredSizeWidget {
+class CustomPOSAppBar extends StatefulWidget implements PreferredSizeWidget {
   final bool showReturnButton;
 
   const CustomPOSAppBar({
@@ -12,21 +14,46 @@ class CustomPOSAppBar extends StatelessWidget implements PreferredSizeWidget {
   }) : super(key: key);
 
   @override
+  _CustomPOSAppBarState createState() => _CustomPOSAppBarState();
+
+  @override
+  Size get preferredSize => const Size.fromHeight(100);
+}
+
+class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
+  late Timer _timer;
+  DateTime _currentDateTime = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    // Update time every second
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _currentDateTime = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocBuilder<StoreCubit, int>(
       builder: (context, currentStoreId) {
-        // Change the title depending on the store id
         final titleText = currentStoreId == 1
             ? "Kiosque Djalil Ranim"
             : "Quincaillerie Djalil Ranim";
 
         return AppBar(
-          leading: showReturnButton
+          leading: widget.showReturnButton
               ? IconButton(
                   icon: const Icon(Icons.arrow_back, size: 40, color: Colors.white),
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: () => Navigator.pop(context),
                 )
               : null,
           title: Padding(
@@ -42,12 +69,24 @@ class CustomPOSAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           backgroundColor: MyColors.mainColor(context),
           centerTitle: true,
-          toolbarHeight: 100, // fixed height
+          toolbarHeight: 100,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Center(
+                child: Text(
+                  DateFormat('yyyy-MM-dd – HH:mm:ss').format(_currentDateTime),
+                  style: const TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
   }
-
-  @override
-  Size get preferredSize => const Size.fromHeight(100);
 }

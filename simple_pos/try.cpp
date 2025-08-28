@@ -2,16 +2,30 @@
 
 using namespace std;
 
+
+
+
+
+
 int main(){
-    int s ;
-    int p ;
-    int q ;
-    int r ;
-    int a ;
-    int b ;
-    int c ;
-    int d ;
-    int e ;
-    cout << s << p << q << r << a << b << d << d << e <<endl;
+
+    int c = 5;
+    int d = 5;
+
+
+
+
+
+    pl(d);
+    cout << d << endl;
+    void pl(int);
+
+
+
     return 0;
+}
+    void pl(int i){ 
+    i = i + 1;
+    cout << "non ref" <<i << endl;
+    return ; 
 }

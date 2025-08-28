@@ -51,22 +51,31 @@ Future<void> showEditProductDialog(
                         numbersOnly: true),
                     const SizedBox(height: 10),
                     _buildTextField(
-                        label: "اسم المنتج", controller: nameController),
+                        label: "اسم المنتج", controller: nameController,
+                        context: context
+                        ),
+                        
                     const SizedBox(height: 10),
                     _buildTextField(
                         label: "ثمن البيع",
                         controller: priceController,
-                        numbersOnly: true),
+                        numbersOnly: true,
+                        context: context
+                        ),
                     const SizedBox(height: 10),
                     _buildTextField(
                         label: "سعر الشراء",
                         controller: buyingPriceController,
-                        numbersOnly: true),
+                        numbersOnly: true,
+                        context: context
+                        ),
                     const SizedBox(height: 10),
                     _buildTextField(
                         label: "الكمية",
                         controller: quantityController,
-                        numbersOnly: true),
+                        numbersOnly: true,
+                        context: context
+                        ),
                   ],
 
                   const SizedBox(height: 20),

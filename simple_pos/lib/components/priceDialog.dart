@@ -109,13 +109,17 @@ class PriceDialog {
                           
                         ),
                         const SizedBox(height: 10),
-                        _buildTextField(
-                          label: "ثمن المنتج",
-                          controller: TextEditingController(text: productPrice ?? ''),
-                          readOnly: true,
-                          fillColor: MyColors.secondColor(context),
-                          context: context
+                      _buildTextField(
+                        label: "ثمن المنتج",
+                        controller: TextEditingController(
+                          text: productPrice != null 
+                              ? (double.tryParse(productPrice!) ?? 0.0).toStringAsFixed(2) 
+                              : '',
                         ),
+                        readOnly: true,
+                        fillColor: MyColors.secondColor(context),
+                        context: context,
+                      ),
                       ],
 
                       const SizedBox(height: 30),
