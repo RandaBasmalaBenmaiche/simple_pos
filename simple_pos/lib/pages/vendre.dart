@@ -9,6 +9,7 @@ import 'package:simple_pos/components/alphaNumericInputField.dart';
 import 'package:simple_pos/components/paying.dart';
 import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/components/sellTable.dart';
+import 'package:simple_pos/pages/history.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
 import 'package:simple_pos/services/local_database/model/tableinvoice.dart';
@@ -33,11 +34,16 @@ class _POSPageState extends State<POSPage> {
   List<Map<String, dynamic>> items = [];
   double total = 0;
   final FocusNode codeFocusNode = FocusNode();
+  final FocusNode nameFocusNode = FocusNode();
   final FocusNode quantityFocusNode = FocusNode();
   final FocusNode keyboardFocusNode = FocusNode();
 
   List<String> allItems = [];
   List<String> allCustomers = [];
+
+  bool autoMode = true;
+  bool quantity = true;
+  int lastFcous = 0; //0 for code 1 for name
 
   void addItem(int store) async {
     String codeInput = codeController.text.trim();
@@ -45,7 +51,7 @@ class _POSPageState extends State<POSPage> {
     int quantity = int.tryParse(quantityController.text) ?? 0;
 
     if ((codeInput.isEmpty && nameInput.isEmpty) || quantity <= 0) {
-      codeFocusNode.requestFocus();
+      //codeFocusNode.requestFocus();
       return;
     }
 
@@ -72,7 +78,7 @@ class _POSPageState extends State<POSPage> {
           ],
         ),
       );
-      codeFocusNode.requestFocus();
+      //codeFocusNode.requestFocus();
       return;
     }
 
@@ -101,7 +107,7 @@ class _POSPageState extends State<POSPage> {
       );
 
       setState(() {});
-      codeFocusNode.requestFocus();
+      //codeFocusNode.requestFocus();
       return;
     }
 
@@ -125,7 +131,7 @@ class _POSPageState extends State<POSPage> {
       customerController.clear();
       quantityController.clear();
 
-      codeFocusNode.requestFocus();
+      //codeFocusNode.requestFocus();
     });
   }
 
@@ -239,35 +245,121 @@ class _POSPageState extends State<POSPage> {
       body: RawKeyboardListener(
         focusNode: keyboardFocusNode,
         onKey: (RawKeyEvent event) {
+
           if (event is RawKeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.enter) {
-            addItem(currentStoreId);
-            keyboardFocusNode.unfocus();
-            Future.delayed(const Duration(milliseconds: 50), () {
-              FocusScope.of(context).requestFocus(codeFocusNode);
-            });
+
+            if(autoMode){
+              addItem(currentStoreId);
+              keyboardFocusNode.unfocus();
+                if(lastFcous == 0){
+                  Future.delayed(const Duration(milliseconds: 50), () {
+                  FocusScope.of(context).requestFocus(codeFocusNode);
+                });
+                }
+              else if(lastFcous == 1){
+                print("supposed to make it");
+                Future.delayed(const Duration(milliseconds: 50), () {
+                FocusScope.of(context).requestFocus(nameFocusNode);
+                print("supposed to make it");
+              });
+              }
+            }
+            else {
+              if(quantity){
+                  Future.delayed(const Duration(milliseconds: 50), () {
+                  FocusScope.of(context).requestFocus(quantityFocusNode);
+                }); 
+                quantity = !quantity; 
+              }
+              else{
+                addItem(currentStoreId);
+              keyboardFocusNode.unfocus();
+                if(lastFcous == 0){
+                  Future.delayed(const Duration(milliseconds: 50), () {
+                  FocusScope.of(context).requestFocus(codeFocusNode);
+                });
+                }
+              else if(lastFcous == 1){
+                print("supposed to make it");
+                Future.delayed(const Duration(milliseconds: 50), () {
+                FocusScope.of(context).requestFocus(nameFocusNode);
+                print("supposed to make it");
+              });
+              }
+              quantity =! quantity;
+              }
+            }
+            
+            
+
+
+            
           }
         },
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
           child: Column(
             children: [
+          Row(
+            children: [
+              Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: [
+                  Text("وضع يدوي", style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),),
+                  Switch(
+                    value: autoMode,
+                    onChanged: (value) {
+                      autoMode =! autoMode;
+                      setState(() {});
+                    },
+                  ),
+                  Text("وضع تلقائي", style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),),
+                ],
+              ),
+              ),
+Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              Text("الاسم", style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),),
+              Switch(
+                value: (lastFcous == 0)? true : false,
+                onChanged: (value) {
+                  lastFcous = (lastFcous == 0)? 1 : 0;
+                  setState(() {});
+                },
+              ),
+              Text("الكود", style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),),
+            ],
+          ),
+        ),
+            ],
+          ),
+          
               Row(
                 children: [
                   NumericInputField(
                     controller: quantityController,
                     label: "الكمية",
                     defaultValue: "1",
+                    focusNode: quantityFocusNode,
                   ),
                   const SizedBox(width: 16),
 
                   // 🔹 Product autocomplete
-                  AutoCompleteInputField(
-                    controller: nameController,
-                    label: "المنتج",
-                    isAlphanumeric: true,
-                    suggestions: allItems,
-                  ),
+                  
+                  
+                    AutoCompleteInputField(
+                      controller: nameController,
+                      label: "المنتج",
+                      isAlphanumeric: true,
+                      suggestions: allItems,
+                      focusNode: nameFocusNode,
+                    ),
+                  
+                  
                   const SizedBox(width: 16),
 
                   // 🔹 Customer autocomplete
@@ -369,7 +461,10 @@ class _POSPageState extends State<POSPage> {
                     const SizedBox(width: 10,),
                         CustomActionButton(
                           text: "بيع",
-                          onPressed: () => sellItems(currentStoreId),
+                          onPressed: () => {sellItems(currentStoreId),
+                          Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPageHistorique()),),
+                          }
+                          ,
                         ),
                         
 

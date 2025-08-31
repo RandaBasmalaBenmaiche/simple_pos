@@ -24,20 +24,18 @@ class AutoCompleteInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // set default value if provided
+    // Set default value if provided
     if (defaultValue != null && controller.text.isEmpty) {
       controller.text = defaultValue!;
     }
 
     Widget field = Autocomplete<String>(
       optionsBuilder: (TextEditingValue textEditingValue) {
-        if (textEditingValue.text == '') {
+        if (textEditingValue.text.isEmpty) {
           return const Iterable<String>.empty();
         }
         return suggestions.where((String option) {
-          return option
-              .toLowerCase()
-              .contains(textEditingValue.text.toLowerCase());
+          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
         });
       },
       onSelected: (String selection) {
@@ -47,15 +45,26 @@ class AutoCompleteInputField extends StatelessWidget {
           TextEditingController textEditingController,
           FocusNode fieldFocusNode,
           VoidCallback onFieldSubmitted) {
-        // 🔹 Always sync external controller with internal one
+        
+        // Sync external controller with internal one
         textEditingController.text = controller.text;
         textEditingController.addListener(() {
           controller.text = textEditingController.text;
         });
 
+        // ✅ Forward external focusNode to internal fieldFocusNode
+        if (focusNode != null) {
+          focusNode!.addListener(() {
+            if (focusNode!.hasFocus) {
+              print("got focus");
+              fieldFocusNode.requestFocus();
+            } 
+          });
+        }
+
         return TextField(
           controller: textEditingController,
-          focusNode: focusNode ?? fieldFocusNode,
+          focusNode: fieldFocusNode, // ✅ Always keep internal node
           inputFormatters: [
             isAlphanumeric
                 ? FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]'))
@@ -78,10 +87,9 @@ class AutoCompleteInputField extends StatelessWidget {
               fontSize: 20,
             ),
           ),
-          keyboardType:
-              isAlphanumeric ? TextInputType.text : TextInputType.number,
+          keyboardType: isAlphanumeric ? TextInputType.text : TextInputType.number,
           onEditingComplete: () {
-            // 🔹 Sync again on Enter
+            // Sync again on Enter
             controller.text = textEditingController.text;
             onFieldSubmitted();
           },
