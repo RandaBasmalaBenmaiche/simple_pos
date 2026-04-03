@@ -10,6 +10,11 @@ Future<void> showAddCustomerDialog(
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController debtController = TextEditingController(text: "0");
 
+  // Focus nodes to handle Enter key navigation
+  final FocusNode nameFocus = FocusNode();
+  final FocusNode phoneFocus = FocusNode();
+  final FocusNode debtFocus = FocusNode();
+
   return showDialog(
     context: context,
     builder: (context) {
@@ -22,13 +27,22 @@ Future<void> showAddCustomerDialog(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildTextField(label: "اسم العميل", controller: nameController, context: context),
+              _buildTextField(
+                label: "اسم العميل",
+                controller: nameController,
+                context: context,
+                focusNode: nameFocus,
+                autofocus: true,
+                onSubmitted: (_) => FocusScope.of(context).requestFocus(phoneFocus),
+              ),
               const SizedBox(height: 10),
               _buildTextField(
                 label: "الهاتف",
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 context: context,
+                focusNode: phoneFocus,
+                onSubmitted: (_) => FocusScope.of(context).requestFocus(debtFocus),
               ),
               const SizedBox(height: 10),
               _buildTextField(
@@ -37,6 +51,22 @@ Future<void> showAddCustomerDialog(
                 keyboardType: TextInputType.number,
                 numbersOnly: true,
                 context: context,
+                focusNode: debtFocus,
+                onSubmitted: (_) {
+                  // Trigger submit when pressing Enter on last field
+                  if (nameController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("الرجاء إدخال اسم العميل")),
+                    );
+                    return;
+                  }
+                  onAdd(
+                    nameController.text,
+                    phoneController.text,
+                    debtController.text,
+                  );
+                  Navigator.pop(context);
+                },
               ),
               const SizedBox(height: 20),
               Row(
@@ -91,12 +121,18 @@ Widget _buildTextField({
   required TextEditingController controller,
   TextInputType keyboardType = TextInputType.text,
   bool numbersOnly = false,
-  context,
+  BuildContext? context,
+  FocusNode? focusNode,
+  bool autofocus = false,
+  void Function(String)? onSubmitted,
 }) {
   return TextField(
     controller: controller,
     keyboardType: keyboardType,
     inputFormatters: numbersOnly ? [FilteringTextInputFormatter.digitsOnly] : null,
+    focusNode: focusNode,
+    autofocus: autofocus,
+    onSubmitted: onSubmitted,
     decoration: InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
@@ -105,7 +141,7 @@ Widget _buildTextField({
         borderSide: BorderSide.none,
       ),
       filled: true,
-      fillColor: MyColors.secondColor(context),
+      fillColor: context != null ? MyColors.secondColor(context) : Colors.grey[200],
     ),
   );
 }

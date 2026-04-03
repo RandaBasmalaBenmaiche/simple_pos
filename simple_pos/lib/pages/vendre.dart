@@ -43,15 +43,15 @@ class _POSPageState extends State<POSPage> {
 
   bool autoMode = true;
   bool quantity = true;
-  int lastFcous = 0; //0 for code 1 for name
+  int lastFcous = 0; // 0 for code, 1 for name
 
   void addItem(int store) async {
+    bool isName = false;
     String codeInput = codeController.text.trim();
     String nameInput = nameController.text.trim();
     int quantity = int.tryParse(quantityController.text) ?? 0;
 
     if ((codeInput.isEmpty && nameInput.isEmpty) || quantity <= 0) {
-      //codeFocusNode.requestFocus();
       return;
     }
 
@@ -62,6 +62,7 @@ class _POSPageState extends State<POSPage> {
       product = await DStockTable().getProductByCode(codeInput, store);
     } else if (nameInput.isNotEmpty) {
       product = await DStockTable().getProductByName(nameInput, store);
+      isName = true;
     }
 
     if (product == null) {
@@ -78,16 +79,26 @@ class _POSPageState extends State<POSPage> {
           ],
         ),
       );
-      //codeFocusNode.requestFocus();
       return;
     }
 
-    codeController.text = product['productCodeBar'].toString();
-    nameController.text = product['productName'].toString();
+    // Null-safe values
+    final codeBar = product['productCodeBar']?.toString() ?? '';
+    final name = product['productName']?.toString() ?? 'بدون اسم';
+    final price = double.tryParse(product['productPrice']?.toString() ?? '') ?? 0.0;
+    final buyingPrice = double.tryParse(product['productBuyingPrice']?.toString() ?? '0') ?? 0.0;
+
+    codeController.text = codeBar;
+    nameController.text = name;
 
     // Check if already in invoice
-    final existIndex =
-        items.indexWhere((p) => p['productCodeBar'] == product!['productCodeBar']);
+    var existIndex;
+    if(!isName){
+        existIndex = items.indexWhere((p) => p['productCodeBar'] == codeBar && !isName);
+    }
+    else{
+    existIndex = items.indexWhere((p) => p['productName'] == codeBar && isName);
+    }
     if (existIndex != -1) {
       items[existIndex]['productQuantity'] =
           (int.parse(items[existIndex]['productQuantity']) + quantity).toString();
@@ -96,46 +107,43 @@ class _POSPageState extends State<POSPage> {
                   double.parse(items[existIndex]['productPrice']))
               .toStringAsFixed(2);
 
-      codeController.clear();
-      nameController.clear();
-      customerController.clear();
-      quantityController.clear();
-
-      total = items.fold<double>(
-        0.0,
-        (sum, item) => sum + (double.tryParse(item['total'].toString()) ?? 0.0),
-      );
-
+      _clearInputs();
+      _updateTotal();
       setState(() {});
-      //codeFocusNode.requestFocus();
       return;
     }
 
     // Add new item
-    double price = double.tryParse(product['productPrice'].toString()) ?? 0;
     double itemTotal = price * quantity;
     Map<String, dynamic> item = {
-      "productCodeBar": product['productCodeBar'],
-      "productName": product['productName'],
+      "productCodeBar": codeBar,
+      "productName": name,
       "productPrice": price.toStringAsFixed(2),
-      "productBuyingPrice": product['productBuyingPrice'],
+      "productBuyingPrice": buyingPrice.toStringAsFixed(2),
       "productQuantity": quantity.toString(),
       "total": itemTotal.toStringAsFixed(2),
     };
     setState(() {
       items.add(item);
       total += itemTotal;
-
-      codeController.clear();
-      nameController.clear();
-      customerController.clear();
-      quantityController.clear();
-
-      //codeFocusNode.requestFocus();
+      _clearInputs();
     });
   }
 
-  void sellItems(int store) async {
+  void _clearInputs() {
+    codeController.clear();
+    nameController.clear();
+    quantityController.clear();
+  }
+
+  void _updateTotal() {
+    total = items.fold<double>(
+      0.0,
+      (sum, item) => sum + (double.tryParse(item['total'].toString()) ?? 0.0),
+    );
+  }
+
+  Future<void> sellItems(int store) async {
     if (items.isEmpty) return;
     double totalProfit = 0;
 
@@ -162,43 +170,47 @@ class _POSPageState extends State<POSPage> {
 
     // 2. Insert invoice items
     for (var item in items) {
-      totalProfit += (double.parse(item['productPrice']) -
-              double.parse(item['productBuyingPrice'])) *
-          double.parse(item['productQuantity']);
+      double price = double.tryParse(item['productPrice']?.toString() ?? '0') ?? 0;
+      double buyingPrice =
+          double.tryParse(item['productBuyingPrice']?.toString() ?? '0') ?? 0;
+      int qty = int.tryParse(item['productQuantity']?.toString() ?? '0') ?? 0;
+      double profit = (price - buyingPrice) * qty;
+
+      totalProfit += profit;
       await DInvoiceItemsTable().insertRecord({
         "invoice_id": invoiceId,
-        "productCodeBar": item['productCodeBar'],
-        "productName": item['productName'],
-        "quantity": int.parse(item['productQuantity']),
-        "price": double.parse(item['productPrice']),
-        "profit": (double.parse(item['productPrice']) -
-                double.parse(item['productBuyingPrice'])) *
-            double.parse(item['productQuantity']),
-        "totalPrice": double.parse(item['total']),
+        "productCodeBar": item['productCodeBar'] ?? '',
+        "productName": item['productName'] ?? 'بدون اسم',
+        "quantity": qty,
+        "price": price,
+        "profit": profit,
+        "totalPrice":
+            double.tryParse(item['total']?.toString() ?? '0') ?? 0.0,
       });
 
       // 3. Update stock
       final product =
-          await DStockTable().getProductByCode(item['productCodeBar'], store);
+          await DStockTable().getProductByCode(item['productCodeBar'] ?? '', store);
       if (product != null) {
         int currentQuantity =
-            int.tryParse(product['productQuantity'].toString()) ?? 0;
-        int newQuantity = currentQuantity - int.parse(item['productQuantity']);
+            int.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
+        int newQuantity = currentQuantity - qty;
         if (newQuantity < 0) newQuantity = 0;
         await DStockTable().updateProduct(
-          codeBar: product['productCodeBar'],
+          codeBar: product['productCodeBar'] ?? '',
           storeId: store,
           newQuantity: newQuantity.toString(),
         );
       }
 
-      // 4. update profit in invoice
-      await DInvoiceTable().updateInvoice(id: invoiceId ?? 0,profit: totalProfit,);
-      
-
+      // 4. Update profit in invoice
+      await DInvoiceTable().updateInvoice(id: invoiceId ?? 0, profit: totalProfit);
     }
 
-    // 5. Clear invoice
+    // 5. Reseting the debt
+    await DInvoiceTable().resetDebt(invoiceId: invoiceId??0);
+
+    // 6. Clear invoice
     setState(() {
       items.clear();
       total = 0;
@@ -211,8 +223,11 @@ class _POSPageState extends State<POSPage> {
     final rawCustomers = await DCustomersTable().getRecords();
 
     setState(() {
-      allItems = rawItems.map((item) => item["productName"] as String).toList();
-      allCustomers = rawCustomers.map((item) => item["name"] as String).toList();
+      allItems = rawItems
+          .map((item) => item["productName"]?.toString() ?? 'بدون اسم')
+          .toList();
+      allCustomers =
+          rawCustomers.map((item) => item["name"]?.toString() ?? 'مجهول').toList();
     });
   }
 
@@ -245,99 +260,95 @@ class _POSPageState extends State<POSPage> {
       body: RawKeyboardListener(
         focusNode: keyboardFocusNode,
         onKey: (RawKeyEvent event) {
-
           if (event is RawKeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.enter) {
-
-            if(autoMode){
+            if (autoMode) {
               addItem(currentStoreId);
               keyboardFocusNode.unfocus();
-                if(lastFcous == 0){
-                  Future.delayed(const Duration(milliseconds: 50), () {
+              if (lastFcous == 0) {
+                Future.delayed(const Duration(milliseconds: 50), () {
                   FocusScope.of(context).requestFocus(codeFocusNode);
                 });
-                }
-              else if(lastFcous == 1){
-                print("supposed to make it");
+              } else if (lastFcous == 1) {
                 Future.delayed(const Duration(milliseconds: 50), () {
-                FocusScope.of(context).requestFocus(nameFocusNode);
-                print("supposed to make it");
-              });
+                  FocusScope.of(context).requestFocus(nameFocusNode);
+                });
               }
-            }
-            else {
-              if(quantity){
-                  Future.delayed(const Duration(milliseconds: 50), () {
+            } else {
+              if (quantity) {
+                Future.delayed(const Duration(milliseconds: 50), () {
                   FocusScope.of(context).requestFocus(quantityFocusNode);
-                }); 
-                quantity = !quantity; 
-              }
-              else{
-                addItem(currentStoreId);
-              keyboardFocusNode.unfocus();
-                if(lastFcous == 0){
-                  Future.delayed(const Duration(milliseconds: 50), () {
-                  FocusScope.of(context).requestFocus(codeFocusNode);
                 });
+                quantity = !quantity;
+              } else {
+                addItem(currentStoreId);
+                keyboardFocusNode.unfocus();
+                if (lastFcous == 0) {
+                  Future.delayed(const Duration(milliseconds: 50), () {
+                    FocusScope.of(context).requestFocus(codeFocusNode);
+                  });
+                } else if (lastFcous == 1) {
+                  Future.delayed(const Duration(milliseconds: 50), () {
+                    FocusScope.of(context).requestFocus(nameFocusNode);
+                  });
                 }
-              else if(lastFcous == 1){
-                print("supposed to make it");
-                Future.delayed(const Duration(milliseconds: 50), () {
-                FocusScope.of(context).requestFocus(nameFocusNode);
-                print("supposed to make it");
-              });
-              }
-              quantity =! quantity;
+                quantity = !quantity;
               }
             }
-            
-            
-
-
-            
           }
         },
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
           child: Column(
             children: [
-          Row(
-            children: [
-              Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
+              Row(
                 children: [
-                  Text("وضع يدوي", style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),),
-                  Switch(
-                    value: autoMode,
-                    onChanged: (value) {
-                      autoMode =! autoMode;
-                      setState(() {});
-                    },
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: [
+                        Text("وضع يدوي",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: MyColors.mainColor(context))),
+                        Switch(
+                          value: autoMode,
+                          onChanged: (value) {
+                            autoMode = !autoMode;
+                            setState(() {});
+                          },
+                        ),
+                        Text("وضع تلقائي",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: MyColors.mainColor(context))),
+                      ],
+                    ),
                   ),
-                  Text("وضع تلقائي", style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: [
+                        Text("الاسم",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: MyColors.mainColor(context))),
+                        Switch(
+                          value: (lastFcous == 0) ? true : false,
+                          onChanged: (value) {
+                            lastFcous = (lastFcous == 0) ? 1 : 0;
+                            setState(() {});
+                          },
+                        ),
+                        Text("الكود",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: MyColors.mainColor(context))),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-              ),
-Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
-            children: [
-              Text("الاسم", style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),),
-              Switch(
-                value: (lastFcous == 0)? true : false,
-                onChanged: (value) {
-                  lastFcous = (lastFcous == 0)? 1 : 0;
-                  setState(() {});
-                },
-              ),
-              Text("الكود", style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),),
-            ],
-          ),
-        ),
-            ],
-          ),
-          
               Row(
                 children: [
                   NumericInputField(
@@ -347,22 +358,14 @@ Padding(
                     focusNode: quantityFocusNode,
                   ),
                   const SizedBox(width: 16),
-
-                  // 🔹 Product autocomplete
-                  
-                  
-                    AutoCompleteInputField(
-                      controller: nameController,
-                      label: "المنتج",
-                      isAlphanumeric: true,
-                      suggestions: allItems,
-                      focusNode: nameFocusNode,
-                    ),
-                  
-                  
+                  AutoCompleteInputField(
+                    controller: nameController,
+                    label: "المنتج",
+                    isAlphanumeric: true,
+                    suggestions: allItems,
+                    focusNode: nameFocusNode,
+                  ),
                   const SizedBox(width: 16),
-
-                  // 🔹 Customer autocomplete
                   AutoCompleteInputField(
                     controller: customerController,
                     label: "الزبون",
@@ -370,7 +373,6 @@ Padding(
                     suggestions: allCustomers,
                   ),
                   const SizedBox(width: 16),
-
                   NumericInputField(
                     controller: codeController,
                     label: "الكود",
@@ -390,24 +392,20 @@ Padding(
                   height: MediaQuery.of(context).size.height * 0.6,
                   child: POSItemsTable(
                     items: items,
-                    sellItems: () => sellItems(currentStoreId),
+                    sellItems: () async => await sellItems(currentStoreId),
                     onQuantityChanged: (index, newQuantity) {
                       setState(() {
                         items[index]["productQuantity"] = newQuantity;
-                        items[index]["total"] =
-                            (int.parse(items[index]['productQuantity']) *
-                                    double.parse(items[index]['productPrice']))
-                                .toStringAsFixed(2);
-                        total = items.fold<double>(
-                          0.0,
-                          (sum, item) =>
-                              sum + (double.tryParse(item['total'].toString()) ?? 0.0),
-                        );
+                        items[index]["total"] = ((int.tryParse(items[index]['productQuantity'] ?? '0') ?? 0) *
+                                (double.tryParse(items[index]['productPrice'] ?? '0') ?? 0))
+                            .toStringAsFixed(2);
+                        _updateTotal();
                       });
                     },
                     onDelete: (index) {
                       setState(() {
                         items.removeAt(index);
+                        _updateTotal();
                       });
                     },
                   ),
@@ -435,42 +433,57 @@ Padding(
                     ),
                     Row(
                       children: [
-                    CustomActionButton(
-                      text: " بيع مجزئ",
-                      onPressed: () async {
-                        if (customerController.text.isEmpty){
-                          showDialog(context: context, builder: 
-                          (BuildContext context){
-                            return AlertDialog( title: const Text("خطأ"),content: const Text("يجب اختيار زبون من اجل هذه الخدمة"),
-                            actions: [TextButton(onPressed: () => Navigator.of(context).pop(),child: const Text("حسناً"), ),],);});}
-                        else{
-                        print("the total is:\t${total}");
-                        showPayingAmountDialog(context, payingController,(amount) async {
-                          // amount = the value customer paid
-                          print("Customer paid: $amount");
+                        CustomActionButton(
+                          text: " بيع مجزئ",
+                          onPressed: () async {
+                            if (customerController.text.isEmpty) {
+                              showDialog(
+                                  context: context,
+                                  builder: (BuildContext context) {
+                                    return AlertDialog(
+                                      title: const Text("خطأ"),
+                                      content: const Text(
+                                          "يجب اختيار زبون من اجل هذه الخدمة"),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(),
+                                          child: const Text("حسناً"),
+                                        ),
+                                      ],
+                                    );
+                                  });
+                            } else {
+                              showPayingAmountDialog(
+                                  context, payingController, (amount) async {
                                 final cus =
-                          await DCustomersTable().getCustomerByName(customerController.text, currentStoreId);
-                          print("ttttttttttttttttttttttttttt${total}");
-                          await DCustomersTable().updateCustomer(id: cus[0]["id"], debt: cus[0]["debt"] + (total - amount));
-                          sellItems(currentStoreId);
-                          });
-                          
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 10,),
+                                    await DCustomersTable().getCustomerByName(
+                                        customerController.text,
+                                        currentStoreId);
+                                await DCustomersTable().updateCustomer(
+                                    id: cus[0]["id"],
+                                    debt: (cus[0]["debt"] ?? 0) +
+                                        (total - amount));
+                                await sellItems(currentStoreId);
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 10),
                         CustomActionButton(
                           text: "بيع",
-                          onPressed: () => {sellItems(currentStoreId),
-                          Navigator.push(context,MaterialPageRoute(builder: (context) => const POSPageHistorique()),),
-                          }
-                          ,
+                          onPressed: () async {
+                            await sellItems(currentStoreId);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) =>
+                                      const POSPageHistorique()),
+                            );
+                          },
                         ),
-                        
-
                       ],
                     ),
-
                   ],
                 ),
               ),

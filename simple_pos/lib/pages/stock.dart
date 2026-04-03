@@ -12,7 +12,6 @@ import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-
 class POSPageStock extends StatefulWidget {
   const POSPageStock({Key? key}) : super(key: key);
 
@@ -22,7 +21,7 @@ class POSPageStock extends StatefulWidget {
 
 class _POSPageState extends State<POSPageStock> {
   List<Map<String, dynamic>> items = [];
-  List<Map<String, dynamic>> allItems = []; // Keep full list
+  List<Map<String, dynamic>> allItems = [];
   TextEditingController searchController = TextEditingController();
 
   @override
@@ -42,16 +41,21 @@ class _POSPageState extends State<POSPageStock> {
 
   Future<void> _loadItems(int store) async {
     final rawItems = await DStockTable().getProductsByStore(store);
+
+    // Add default values for null fields
     final loadedItems = rawItems.map((item) {
       return {
         ...item,
-        'productBuyingPrice': item['productBuyingPrice'] ?? 200, 
+        'productPrice': item['productPrice'] ?? '',
+        'productBuyingPrice': item['productBuyingPrice'] ?? '',
+        'productCodeBar': item['productCodeBar'] ?? '',
+        'productQuantity': item['productQuantity'] ?? '',
       };
     }).toList();
 
     setState(() {
       items = loadedItems;
-      allItems = loadedItems; // Save full list
+      allItems = loadedItems;
     });
   }
 
@@ -64,8 +68,8 @@ class _POSPageState extends State<POSPageStock> {
     }
 
     final filtered = allItems.where((item) {
-      final code = item['productCodeBar'].toString().toLowerCase();
-      final name = item['productName'].toString().toLowerCase();
+      final code = (item['productCodeBar'] ?? '').toString().toLowerCase();
+      final name = (item['productName'] ?? '').toString().toLowerCase();
       return code.contains(query) || name.contains(query);
     }).toList();
 
@@ -84,16 +88,15 @@ class _POSPageState extends State<POSPageStock> {
       final csvString = await file.readAsString();
       List<List<dynamic>> csvTable = const CsvToListConverter().convert(csvString);
 
-      // Assuming header: productName,productPrice,productBuyingPrice,productCodeBar,productQuantity
       for (var i = 1; i < csvTable.length; i++) {
         var row = csvTable[i];
         await DStockTable().insertRecord({
           'store_id': store,
           'productName': row[0].toString(),
-          'productPrice': row[1].toString(),
-          'productBuyingPrice': row[2].toString(),
-          'productCodeBar': row[3].toString(),
-          'productQuantity': row[4].toString(),
+          'productPrice': row[1]?.toString().isNotEmpty == true ? row[1].toString() : null,
+          'productBuyingPrice': row[2]?.toString().isNotEmpty == true ? row[2].toString() : null,
+          'productCodeBar': row[3]?.toString().isNotEmpty == true ? row[3].toString() : null,
+          'productQuantity': row[4]?.toString().isNotEmpty == true ? row[4].toString() : null,
         });
       }
 
@@ -113,17 +116,16 @@ class _POSPageState extends State<POSPageStock> {
 
     for (var product in allProducts) {
       rows.add([
-        product['productName'],
-        product['productPrice'],
-        product['productBuyingPrice'],
-        product['productCodeBar'],
-        product['productQuantity'],
+        product['productName'] ?? '',
+        product['productPrice'] ?? '',
+        product['productBuyingPrice'] ?? '',
+        product['productCodeBar'] ?? '',
+        product['productQuantity'] ?? '',
       ]);
     }
 
     String csv = const ListToCsvConverter().convert(rows);
 
-    // Let user pick a location and file name
     String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'اختر مكان حفظ الملف',
       fileName: 'products_export.csv',
@@ -176,7 +178,7 @@ class _POSPageState extends State<POSPageStock> {
             ),
             const SizedBox(height: 20),
 
-            // Action buttons (Add, Edit, Import, Export)
+            // Action buttons
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -187,11 +189,11 @@ class _POSPageState extends State<POSPageStock> {
                       showAddProductDialog(context, (name, price, buyingPrice, quantity, code) async {
                         await DStockTable().insertRecord({
                           "productName": name,
-                          "store_id":store,
-                          "productPrice": price,
-                          "productQuantity": quantity,
-                          "productCodeBar": code,
-                          "productBuyingPrice": buyingPrice,
+                          "store_id": store,
+                          "productPrice": price.isNotEmpty ? price : null,
+                          "productQuantity": quantity.isNotEmpty ? quantity : null,
+                          "productCodeBar": code.isNotEmpty ? code : null,
+                          "productBuyingPrice": buyingPrice.isNotEmpty ? buyingPrice : null,
                         });
                         await _loadItems(store);
                       });
@@ -236,16 +238,14 @@ class _POSPageState extends State<POSPageStock> {
                   onQuantityChanged: (index, newQuantity) async {
                     final product = items[index];
 
-                    // Update locally
                     setState(() {
                       items[index]["productQuantity"] = newQuantity;
                     });
 
-                    // Update in database
                     await DStockTable().updateProduct(
-                      codeBar: product['productCodeBar'],
-                      newQuantity: newQuantity.toString(),
-                      storeId: store
+                      codeBar: product['productCodeBar'] ?? '',
+                      newQuantity: newQuantity.isNotEmpty ? newQuantity : null,
+                      storeId: store,
                     );
                   },
                   onDelete: (index) async {
@@ -273,7 +273,7 @@ class _POSPageState extends State<POSPageStock> {
 
                     if (confirm == true) {
                       final product = items[index];
-                      await DStockTable().deleteProduct(product['productCodeBar'],store);
+                      await DStockTable().deleteProduct(product['productCodeBar'] ?? '', store);
 
                       setState(() {
                         items.removeAt(index);

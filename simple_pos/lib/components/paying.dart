@@ -8,6 +8,7 @@ Future<void> showPayingAmountDialog(
   void Function(double payingAmount) onSell,
 ) {
   final TextEditingController amountController = amount;
+  final FocusNode amountFocus = FocusNode();
 
   return showDialog(
     context: context,
@@ -21,12 +22,33 @@ Future<void> showPayingAmountDialog(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildTextField(
-                label: "المبلغ المدفوع",
+              TextField(
                 controller: amountController,
+                focusNode: amountFocus,
+                autofocus: true,
                 keyboardType: TextInputType.number,
-                numbersOnly: true,
-                context: context,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: "المبلغ المدفوع",
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: MyColors.secondColor(context),
+                ),
+                onSubmitted: (_) {
+                  final value = double.tryParse(amountController.text);
+                  if (value == null || value <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("الرجاء إدخال مبلغ صحيح")),
+                    );
+                    return;
+                  }
+                  onSell(value);
+                  Navigator.pop(context);
+                },
               ),
               const SizedBox(height: 20),
               Row(
@@ -57,7 +79,6 @@ Future<void> showPayingAmountDialog(
                         );
                         return;
                       }
-
                       onSell(value);
                       Navigator.pop(context);
                     },
@@ -70,29 +91,5 @@ Future<void> showPayingAmountDialog(
         ),
       );
     },
-  );
-}
-
-Widget _buildTextField({
-  required String label,
-  required TextEditingController controller,
-  TextInputType keyboardType = TextInputType.text,
-  bool numbersOnly = false,
-  context,
-}) {
-  return TextField(
-    controller: controller,
-    keyboardType: keyboardType,
-    inputFormatters: numbersOnly ? [FilteringTextInputFormatter.digitsOnly] : null,
-    decoration: InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      filled: true,
-      fillColor: MyColors.secondColor(context),
-    ),
   );
 }

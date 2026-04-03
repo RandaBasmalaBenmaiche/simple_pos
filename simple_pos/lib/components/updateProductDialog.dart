@@ -1,30 +1,115 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For FilteringTextInputFormatter
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:simple_pos/components/AutoComplete.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-
 
 Future<void> showEditProductDialog(
     BuildContext context, VoidCallback onUpdate) async {
   final TextEditingController codeController = TextEditingController(); // old code
+  final TextEditingController oldNameController = TextEditingController(); // old name
   final TextEditingController newCodeController = TextEditingController(); // new code
   final TextEditingController nameController = TextEditingController();
   final TextEditingController priceController = TextEditingController();
   final TextEditingController buyingPriceController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
-  final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
-  
+
+  final int storeId = BlocProvider.of<StoreCubit>(context, listen: false).state;
+
+  final List<String> productNames = await DStockTable().getAllProductNames(storeId);
 
   bool isLoaded = false;
-  bool isCodeEditable = true; // old code editable at first
+  bool isEditable = true;
+
+  final FocusNode newCodeFocus = FocusNode();
+  final FocusNode nameFocus = FocusNode();
+  final FocusNode priceFocus = FocusNode();
+  final FocusNode buyingPriceFocus = FocusNode();
+  final FocusNode quantityFocus = FocusNode();
 
   await showDialog(
     context: context,
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
+          Future<void> loadProduct() async {
+            final items = await DStockTable().getRecords();
+            Map<String, dynamic> product = {};
+
+            if (codeController.text.isNotEmpty) {
+              product = items.firstWhere(
+                  (e) => e['productCodeBar'] == codeController.text,
+                  orElse: () => {});
+            } else if (oldNameController.text.isNotEmpty) {
+              product = items.firstWhere(
+                  (e) => e['productName'] == oldNameController.text,
+                  orElse: () => {});
+            }
+
+            if (product.isNotEmpty) {
+              setState(() {
+                newCodeController.text = product['productCodeBar'] ?? '';
+                nameController.text = product['productName'] ?? '';
+                priceController.text = product['productPrice'] ?? '';
+                buyingPriceController.text = product['productBuyingPrice'] ?? '';
+                quantityController.text = product['productQuantity'] ?? '';
+                isLoaded = true;
+                isEditable = false;
+              });
+              FocusScope.of(context).requestFocus(newCodeFocus);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("المنتج غير موجود")));
+            }
+          }
+
+          Future<void> submitUpdate() async {
+            if (nameController.text.isEmpty ||
+                priceController.text.isEmpty ||
+                buyingPriceController.text.isEmpty ||
+                quantityController.text.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("الرجاء تعبئة جميع الحقول")));
+              return;
+            }
+
+            bool success = false;
+
+            if (codeController.text.isNotEmpty) {
+              success = await DStockTable().updateProduct(
+                codeBar: codeController.text,
+                newCodeBar: newCodeController.text,
+                newName: nameController.text,
+                newPrice: priceController.text,
+                newBuyingPrice: buyingPriceController.text,
+                newQuantity: quantityController.text,
+                storeId: storeId,
+              );
+            } else if (oldNameController.text.isNotEmpty) {
+              success = await DStockTable().updateProductByName(
+                name: oldNameController.text,
+                newCodeBar: newCodeController.text,
+                newName: nameController.text,
+                newPrice: priceController.text,
+                newBuyingPrice: buyingPriceController.text,
+                newQuantity: quantityController.text,
+                storeId: storeId,
+              );
+            }
+
+            if (success) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text("تم التحديث بنجاح")));
+              onUpdate();
+              Navigator.pop(context);
+            } else {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text("حدث خطأ أثناء التحديث")));
+            }
+          }
+
           return Dialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -35,11 +120,19 @@ Future<void> showEditProductDialog(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildTextField(
-                    label: "كود المنتج الحالي",
-                    controller: codeController,
-                    enabled: isCodeEditable,
-                    numbersOnly: true,
-                    context: context
+                      label: "كود المنتج الحالي",
+                      controller: codeController,
+                      enabled: isEditable,
+                      numbersOnly: true,
+                      context: context,
+                      onSubmitted: (_) async => await loadProduct()),
+                  const SizedBox(height: 10),
+                  AutoCompleteInputField(
+                    controller: oldNameController,
+                    label: "اسم المنتج الحالي",
+                    suggestions: productNames,
+                    isAlphanumeric: true,
+                    expands: false,
                   ),
                   const SizedBox(height: 10),
 
@@ -48,34 +141,44 @@ Future<void> showEditProductDialog(
                         label: "كود المنتج الجديد",
                         controller: newCodeController,
                         context: context,
-                        numbersOnly: true),
+                        focusNode: newCodeFocus,
+                        numbersOnly: true,
+                        onSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(nameFocus)),
                     const SizedBox(height: 10),
                     _buildTextField(
-                        label: "اسم المنتج", controller: nameController,
-                        context: context
-                        ),
-                        
+                        label: "اسم المنتج",
+                        controller: nameController,
+                        context: context,
+                        focusNode: nameFocus,
+                        onSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(priceFocus)),
                     const SizedBox(height: 10),
                     _buildTextField(
                         label: "ثمن البيع",
                         controller: priceController,
                         numbersOnly: true,
-                        context: context
-                        ),
+                        context: context,
+                        focusNode: priceFocus,
+                        onSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(buyingPriceFocus)),
                     const SizedBox(height: 10),
                     _buildTextField(
                         label: "سعر الشراء",
                         controller: buyingPriceController,
                         numbersOnly: true,
-                        context: context
-                        ),
+                        context: context,
+                        focusNode: buyingPriceFocus,
+                        onSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(quantityFocus)),
                     const SizedBox(height: 10),
                     _buildTextField(
                         label: "الكمية",
                         controller: quantityController,
                         numbersOnly: true,
-                        context: context
-                        ),
+                        context: context,
+                        focusNode: quantityFocus,
+                        onSubmitted: (_) => submitUpdate()),
                   ],
 
                   const SizedBox(height: 20),
@@ -90,8 +193,7 @@ Future<void> showEditProductDialog(
                         ),
                         onPressed: () => Navigator.pop(context),
                         child: const Padding(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           child: Text("إلغاء",
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
@@ -106,38 +208,9 @@ Future<void> showEditProductDialog(
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                           ),
-                          onPressed: () async {
-                            final items = await DStockTable().getRecords();
-                            final product = items.firstWhere(
-                                (e) =>
-                                    e['productCodeBar'] ==
-                                    codeController.text,
-                                orElse: () => {});
-
-                            if (product.isNotEmpty) {
-                              setState(() {
-                                newCodeController.text =
-                                    product['productCodeBar'];
-                                nameController.text =
-                                    product['productName'];
-                                priceController.text =
-                                    product['productPrice'];
-                                buyingPriceController.text =
-                                    product['productBuyingPrice'] ?? '';
-                                quantityController.text =
-                                    product['productQuantity'];
-                                isLoaded = true;
-                                isCodeEditable = false; // freeze old code
-                              });
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text("الكود غير موجود")));
-                            }
-                          },
+                          onPressed: loadProduct,
                           child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
+                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             child: Text("التالي",
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -152,46 +225,9 @@ Future<void> showEditProductDialog(
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                           ),
-                          onPressed: () async {
-                            // Check if any field is empty
-                            if (newCodeController.text.isEmpty ||
-                                nameController.text.isEmpty ||
-                                priceController.text.isEmpty ||
-                                buyingPriceController.text.isEmpty ||
-                                quantityController.text.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content:
-                                          Text("الرجاء تعبئة جميع الحقول")));
-                              return;
-                            }
-
-                            bool success = await DStockTable().updateProduct(
-                              codeBar: codeController.text,
-                              newCodeBar: newCodeController.text,
-                              newName: nameController.text,
-                              newPrice: priceController.text,
-                              newBuyingPrice: buyingPriceController.text,
-                              newQuantity: quantityController.text,
-                              storeId: store
-                            );
-
-                            if (success) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text("تم التحديث بنجاح")));
-                              onUpdate();
-                              Navigator.pop(context);
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content:
-                                          Text("حدث خطأ أثناء التحديث")));
-                            }
-                          },
+                          onPressed: submitUpdate,
                           child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
+                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             child: Text("حفظ",
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -217,16 +253,18 @@ Widget _buildTextField({
   TextInputType keyboardType = TextInputType.text,
   bool enabled = true,
   bool numbersOnly = false,
-  context
+  BuildContext? context,
+  FocusNode? focusNode,
+  void Function(String)? onSubmitted,
 }) {
-
-
   return TextField(
     controller: controller,
     keyboardType: keyboardType,
     enabled: enabled,
+    focusNode: focusNode,
     inputFormatters:
         numbersOnly ? [FilteringTextInputFormatter.digitsOnly] : null,
+    onSubmitted: onSubmitted,
     decoration: InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
@@ -235,7 +273,7 @@ Widget _buildTextField({
         borderSide: BorderSide.none,
       ),
       filled: true,
-      fillColor:MyColors.secondColor(context),
+      fillColor: context != null ? MyColors.secondColor(context) : Colors.grey[200],
     ),
   );
 }

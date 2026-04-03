@@ -9,6 +9,7 @@ Future<void> showPayDebtDialog(
   void Function(double amount) onPay,
 ) {
   final TextEditingController amountController = TextEditingController();
+  final FocusNode amountFocus = FocusNode();
 
   return showDialog(
     context: context,
@@ -25,12 +26,32 @@ Future<void> showPayDebtDialog(
               const SizedBox(height: 20),
               TextField(
                 controller: amountController,
+                focusNode: amountFocus,
+                autofocus: true,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   labelText: "المبلغ",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
+                onSubmitted: (_) {
+                  // Trigger the same action as the "تأكيد" button
+                  if (amountController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("الرجاء إدخال المبلغ")),
+                    );
+                    return;
+                  }
+                  final amount = double.tryParse(amountController.text) ?? 0;
+                  if (amount <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("المبلغ غير صالح")),
+                    );
+                    return;
+                  }
+                  onPay(amount);
+                  Navigator.pop(context);
+                },
               ),
               const SizedBox(height: 20),
               Row(

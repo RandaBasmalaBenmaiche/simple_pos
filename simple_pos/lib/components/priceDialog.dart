@@ -1,35 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:simple_pos/components/AutoComplete.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
-
-
 
 class PriceDialog {
   static void show({
     required BuildContext context,
     required String title,
     required Function(dynamic value) onSubmit,
-  }) {
-
-
+  }) async {
     final TextEditingController codeController = TextEditingController();
+    final TextEditingController nameController = TextEditingController();
     final FocusNode codeFocusNode = FocusNode();
-    final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
+    final FocusNode nameFocusNode = FocusNode();
+
+    // ✅ Get storeId as int
+    final int storeId = BlocProvider.of<StoreCubit>(context, listen: false).state;
+
+    // ✅ Fetch all product names for suggestions by storeId
+    final List<String> productNames =
+        await DStockTable().getAllProductNames(storeId);
+
     String? productName;
     String? productPrice;
     bool isSubmitted = false;
 
-
-
     showDialog(
       context: context,
       builder: (context) {
-
-        //if we still didn't submit focus for the code input
         Future.delayed(const Duration(milliseconds: 300), () {
           if (context.mounted && !isSubmitted) {
             FocusScope.of(context).requestFocus(codeFocusNode);
@@ -38,12 +39,11 @@ class PriceDialog {
 
         return StatefulBuilder(
           builder: (context, setState) {
-            
-            //MAL PLACE MBE3D
             Future<void> confirm() async {
               await _handleConfirm(
                 context,
                 codeController,
+                nameController,
                 setState,
                 (name, price) {
                   productName = name;
@@ -51,7 +51,7 @@ class PriceDialog {
                   isSubmitted = true;
                 },
                 onSubmit,
-                store,
+                storeId, // ✅ Pass storeId here
               );
             }
 
@@ -60,11 +60,11 @@ class PriceDialog {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: RawKeyboardListener(
-                focusNode: FocusNode(), // needed to listen to keyboard
+                focusNode: FocusNode(),
                 autofocus: true,
                 onKey: (RawKeyEvent event) async {
                   if (event.isKeyPressed(LogicalKeyboardKey.enter)) {
-                    await confirm(); // triggers your _handleConfirm function
+                    await confirm();
                   }
                 },
                 child: Padding(
@@ -83,71 +83,80 @@ class PriceDialog {
                       ),
                       const SizedBox(height: 20),
 
-                      // if not submitted we will have the input field
                       if (!isSubmitted) ...[
                         _buildTextField(
                           label: "الكود",
                           controller: codeController,
                           numbersOnly: true,
                           focusNode: codeFocusNode,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) async {
-                            await confirm(); // trigger confirm on Enter in the text field
-                          },
-                          context: context
+                          textInputAction: TextInputAction.next,
+                          onSubmitted: (_) async => await confirm(),
+                          context: context,
+                        ),
+                        const SizedBox(height: 10),
+
+                        AutoCompleteInputField(
+                          controller: nameController,
+                          label: "اسم المنتج",
+                          suggestions: productNames,
+                          focusNode: nameFocusNode,
+                          isAlphanumeric: true,
+                          expands: false,
                         ),
                       ],
 
-                      // if submitted we show product info
                       if (isSubmitted) ...[
                         _buildTextField(
                           label: "اسم المنتج",
-                          controller: TextEditingController(text: productName ?? ''),
+                          controller:
+                              TextEditingController(text: productName ?? ''),
                           readOnly: true,
                           fillColor: MyColors.secondColor(context),
                           context: context,
-                          
                         ),
                         const SizedBox(height: 10),
-                      _buildTextField(
-                        label: "ثمن المنتج",
-                        controller: TextEditingController(
-                          text: productPrice != null 
-                              ? (double.tryParse(productPrice!) ?? 0.0).toStringAsFixed(2) 
-                              : '',
+                        _buildTextField(
+                          label: "ثمن المنتج",
+                          controller: TextEditingController(
+                            text: productPrice != null
+                                ? (double.tryParse(productPrice!) ?? 0.0)
+                                    .toStringAsFixed(2)
+                                : '',
+                          ),
+                          readOnly: true,
+                          fillColor: MyColors.secondColor(context),
+                          context: context,
                         ),
-                        readOnly: true,
-                        fillColor: MyColors.secondColor(context),
-                        context: context,
-                      ),
                       ],
 
                       const SizedBox(height: 30),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                child: Text(
-                                  "خروج",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 25,
-                                    color: Colors.white,
-                                  ),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              child: Text(
+                                "خروج",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 25,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 20),
-                            if(!isSubmitted)ElevatedButton(
+                          ),
+                          const SizedBox(width: 20),
+                          if (!isSubmitted)
+                            ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: MyColors.mainColor(context),
                                 shape: RoundedRectangleBorder(
@@ -156,7 +165,8 @@ class PriceDialog {
                               ),
                               onPressed: confirm,
                               child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
                                 child: Text(
                                   "تاكيد",
                                   style: TextStyle(
@@ -167,57 +177,61 @@ class PriceDialog {
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ),
             );
-
           },
         );
       },
     );
   }
 
+  static Future<void> _handleConfirm(
+    BuildContext context,
+    TextEditingController codeController,
+    TextEditingController nameController,
+    void Function(void Function()) setState,
+    void Function(String?, String?) onProductLoaded,
+    Function(dynamic) onSubmit,
+    int storeId, // ✅ now int
+  ) async {
+    final code = codeController.text.trim();
+    final name = nameController.text.trim();
 
+    if (code.isEmpty && name.isEmpty) return;
 
-static Future<void> _handleConfirm(
-  BuildContext context,
-  TextEditingController controller,
-  void Function(void Function()) setState,
-  void Function(String?, String?) onProductLoaded,
-  Function(dynamic) onSubmit,
-  store,
-) async {
-  if (controller.text.isEmpty) return;
+    Map<String, dynamic>? product;
 
-  final product = await DStockTable().getProductByCode(controller.text,store);
-
-  if (product == null) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("الكود غير موجود")),
-      );
+    if (code.isNotEmpty) {
+      product = await DStockTable().getProductByCode(code, storeId);
+    } else if (name.isNotEmpty) {
+      product = await DStockTable().getProductByName(name, storeId);
     }
-    return;
+
+    if (product == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("المنتج غير موجود")),
+        );
+      }
+      return;
+    }
+
+    final productName = product['productName'];
+    final productPrice = product['productPrice'];
+
+    setState(() => onProductLoaded(productName, productPrice));
+    onSubmit({
+      'code': product['productCodeBar'], // ✅ fixed key name
+      'name': productName,
+      'price': productPrice,
+    });
   }
 
-  final productName = product['productName'];
-  final productPrice = product['productPrice'];
-
-  
-  setState(() => onProductLoaded(productName, productPrice));
-  onSubmit({
-    'code': controller.text,
-    'name': productName,
-    'price': productPrice,
-  });
-}
-
-
-  //reusable component for the text fields of the dialog 
   static Widget _buildTextField({
     required String label,
     required TextEditingController controller,
@@ -227,7 +241,7 @@ static Future<void> _handleConfirm(
     Function(String)? onSubmitted,
     Color? fillColor,
     TextInputAction? textInputAction,
-    context
+    context,
   }) {
     return TextField(
       controller: controller,
@@ -251,7 +265,6 @@ static Future<void> _handleConfirm(
         ),
         filled: true,
         fillColor: fillColor ?? MyColors.secondColor(context),
-      
       ),
     );
   }

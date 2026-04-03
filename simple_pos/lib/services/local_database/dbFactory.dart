@@ -10,7 +10,7 @@ import 'package:path/path.dart';
 
 
 class DBfactory {
-  static const _database_name = " POS_test_.db";
+  static const _database_name = " POS_test_empty.db";
   static const _database_version = 1;
   static var database;
 

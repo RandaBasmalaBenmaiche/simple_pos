@@ -2,7 +2,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:simple_pos/services/local_database/dbFactory.dart';
 import 'package:simple_pos/services/local_database/dbTable.dart';
 
-
 // ==========================
 // Invoice Table (summary)
 // ==========================
@@ -17,6 +16,7 @@ class DInvoiceTable extends DBBaseTable {
       store_id INTEGER NOT NULL,
       customer_id INTEGER,
       customer_name TEXT,
+      total_debt_customer TEXT DEFAULT '0',
       date TEXT NOT NULL,
       total TEXT NOT NULL,
       profit TEXT NOT NULL DEFAULT '0'
@@ -30,16 +30,18 @@ class DInvoiceTable extends DBBaseTable {
     required String total,
     String? customerName,
     int? customerId,
+    String? totalDebtCustomer,
     required List<Map<String, dynamic>> items,
   }) async {
     try {
       final database = await DBfactory.getDatabase();
 
-      // Insert invoice with store_id, customer details
+      // Insert invoice with store_id, customer details, and total debt
       int invoiceId = await database.insert(db_table, {
         'store_id': storeId,
         'customer_id': customerId,
         'customer_name': customerName,
+        'total_debt_customer': totalDebtCustomer ?? '0',
         'date': date,
         'total': total,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -118,6 +120,7 @@ class DInvoiceTable extends DBBaseTable {
     double? profit,
     String? customerName,
     int? customerId,
+    String? totalDebtCustomer,
   }) async {
     try {
       final database = await DBfactory.getDatabase();
@@ -126,6 +129,7 @@ class DInvoiceTable extends DBBaseTable {
       if (profit != null) updatedFields['profit'] = profit.toString();
       if (customerName != null) updatedFields['customer_name'] = customerName;
       if (customerId != null) updatedFields['customer_id'] = customerId;
+      if (totalDebtCustomer != null) updatedFields['total_debt_customer'] = totalDebtCustomer;
 
       if (updatedFields.isEmpty) return false;
 
@@ -136,6 +140,35 @@ class DInvoiceTable extends DBBaseTable {
         whereArgs: [id],
       );
       return count > 0;
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+      return false;
+    }
+  }
+
+  /// Reset debt of the invoice by fetching the latest debt of the customer
+  Future<bool> resetDebt({required int invoiceId}) async {
+    try {
+      final database = await DBfactory.getDatabase();
+      // Get invoice
+      final invoice = await getInvoiceById(invoiceId);
+      if (invoice == null || invoice['customer_id'] == null) return false;
+
+      final customerId = invoice['customer_id'];
+
+      // Get customer debt from customers table
+      final customerResult = await database.query(
+        'customers',
+        columns: ['debt'],
+        where: 'id = ?',
+        whereArgs: [customerId],
+      );
+
+      if (customerResult.isEmpty) return false;
+      final debt = customerResult.first['debt']?.toString() ?? '0';
+
+      // Update invoice
+      return await updateInvoice(id: invoiceId, totalDebtCustomer: debt);
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
@@ -189,5 +222,3 @@ class DInvoiceItemsTable extends DBBaseTable {
     }
   }
 }
-
-

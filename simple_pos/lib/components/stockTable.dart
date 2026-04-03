@@ -22,76 +22,16 @@ class POSStockItemsTable extends StatefulWidget {
 
 class _POSStockItemsTableState extends State<POSStockItemsTable> {
   // Track which rows have visibility unlocked
-  List<bool> _isBuyingPriceVisible = [];
 
   @override
   void didUpdateWidget(covariant POSStockItemsTable oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     // If items length changes, resize the visibility list safely
-    if (_isBuyingPriceVisible.length != widget.items.length) {
-      _isBuyingPriceVisible = List.generate(
-        widget.items.length,
-        (index) => index < _isBuyingPriceVisible.length
-            ? _isBuyingPriceVisible[index]
-            : false,
-      );
-    }
+
   }
 
-  void _toggleVisibility(int index) async {
-    if (_isBuyingPriceVisible[index]) {
-      // Already visible → hide it
-      setState(() {
-        _isBuyingPriceVisible[index] = false;
-      });
-    } else {
-      // Hidden → ask for password
-      final TextEditingController passwordController = TextEditingController();
 
-      bool? success = await showDialog<bool>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text("أدخل كلمة المرور"),
-            content: TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                hintText: "كلمة المرور",
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text("إلغاء"),
-              ),
-              TextButton(
-                onPressed: () {
-                  if (passwordController.text == "1234") {
-                    Navigator.of(context).pop(true); // correct password
-                  } else {
-                    Navigator.of(context).pop(false);
-                  }
-                },
-                child: const Text("تأكيد"),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (success == true) {
-        setState(() {
-          _isBuyingPriceVisible[index] = true;
-        });
-      } else if (success == false) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("كلمة المرور غير صحيحة")),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +50,6 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
         horizontalMargin: 12,
         minWidth: 700,
         columns: const [
-          DataColumn2(label: Text("سعر الشراء"), size: ColumnSize.S),
           DataColumn2(label: Text("سعر الوحدة"), size: ColumnSize.S),
           DataColumn2(label: Text("الكمية"), size: ColumnSize.S),
           DataColumn2(label: Text("الاسم"), size: ColumnSize.L),
@@ -120,39 +59,33 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
         rows: List.generate(widget.items.length, (index) {
           final item = widget.items[index];
 
+          // Handle optional fields with safe defaults
+          final price = item['productPrice']?.toString();
+          final quantity = item['productQuantity']?.toString();
+          final name = item['productName']?.toString();
+          final codeBar = item['productCodeBar']?.toString();
+
           return DataRow(
             cells: [
+
+
+              // Selling Price (null-safe with default 0.00)
               DataCell(
                 Text(
-                  _isBuyingPriceVisible[index]
-                      ? item['productBuyingPrice'].toString()
-                      : "****",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-              ),
-              DataCell(
-                Text(
-                  double.tryParse(item['productPrice'].toString())?.toStringAsFixed(2) ?? '0.00',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
+                  double.tryParse(price ?? '')?.toStringAsFixed(2) ?? '0.00',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                 ),
               ),
 
+              // Quantity (null-safe with default 0)
               DataCell(
                 SizedBox(
                   width: 60,
                   child: TextField(
                     controller: TextEditingController.fromValue(
                       TextEditingValue(
-                        text: item['productQuantity'].toString(),
-                        selection: TextSelection.collapsed(
-                          offset: item['productQuantity'].toString().length,
-                        ),
+                        text: quantity ?? '0',
+                        selection: TextSelection.collapsed(offset: (quantity ?? '0').length),
                       ),
                     ),
                     keyboardType: TextInputType.number,
@@ -167,36 +100,26 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                   ),
                 ),
               ),
+
+              // Product Name (null-safe with default)
               DataCell(Text(
-                item['productName'].toString(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
+                name ?? 'بدون اسم',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
               )),
+
+              // Product Code (null-safe with default)
               DataCell(Text(
-                item['productCodeBar'].toString(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
+                codeBar ?? 'بدون كود',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
               )),
+
+              // Actions
               DataCell(
                 Row(
                   children: [
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
                       onPressed: () => widget.onDelete(index),
-                    ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      icon: Icon(
-                        _isBuyingPriceVisible[index]
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: Colors.cyan,
-                      ),
-                      onPressed: () => _toggleVisibility(index),
                     ),
                   ],
                 ),

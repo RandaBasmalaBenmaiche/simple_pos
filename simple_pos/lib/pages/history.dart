@@ -10,64 +10,75 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:intl/intl.dart';
 
-
+// ✅ Generate Invoice PDF safely with mirrored columns
 Future<pw.Document> generateInvoicePdf(
   Map<String, dynamic> invoice,
   List<Map<String, dynamic>> items,
 ) async {
   final pdf = pw.Document();
 
-  // Load Arabic font from assets
+  // Load Arabic font
   final fontData = await rootBundle.load("assets/fonts/NotoNaskhArabic-VariableFont_wght.ttf");
   final ttf = pw.Font.ttf(fontData);
 
-  // Format date
-  final DateTime parsedDate = DateTime.parse(invoice['date']);
+  // ✅ Safely parse date
+  final String dateString = invoice['date']?.toString() ?? '';
+  final DateTime parsedDate = DateTime.tryParse(dateString) ?? DateTime.now();
   final String formattedDate = DateFormat('yyyy-MM-dd – kk:mm').format(parsedDate);
 
   pdf.addPage(
     pw.MultiPage(
-      textDirection: pw.TextDirection.rtl, // ✅ RTL for Arabic
+      textDirection: pw.TextDirection.rtl,
       build: (pw.Context context) => [
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            // Invoice header
             pw.Text(
-              "فاتورة #${invoice['id']}",
+              "وصل رقم ${invoice['id'].toString().padLeft(2, '0') }",
               style: pw.TextStyle(font: ttf, fontSize: 24, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 10),
             pw.Text("التاريخ: $formattedDate", style: pw.TextStyle(font: ttf)),
             pw.Text("الزبون: ${invoice['customer_name'] ?? 'زائر'}", style: pw.TextStyle(font: ttf)),
+            // ✅ Display total debt
+            pw.Text(
+              "إجمالي الدين: ${(double.tryParse(invoice['total_debt_customer']?.toString() ?? '') ?? 0.0).toStringAsFixed(2)} دج",
+              style: pw.TextStyle(font: ttf),
+            ),
             pw.SizedBox(height: 20),
 
-            // Items table
+            // ✅ Table with mirrored headers and rows
             pw.Table.fromTextArray(
-              headers: ["المنتج", "الكمية", "السعر", "المجموع"],
-              data: items.map((item) {
+              headers: ["المجموع", "السعر", "الكمية", "المنتج", "رقم"], // ✅ Reverse order
+              data: List.generate(items.length, (i) {
+                final item = items[i];
+                final productName = item['productName'] ?? 'غير محدد';
+                final quantity = (item['quantity'] ?? '0').toString();
+                final price = (double.tryParse(item['price']?.toString() ?? '') ?? 0.0).toStringAsFixed(2);
+                final total = (double.tryParse(item['totalPrice']?.toString() ?? '') ?? 0.0).toStringAsFixed(2);
+
                 return [
-                  item['productName'],
-                  item['quantity'],
-                  (double.tryParse(item['price'].toString()) ?? 0.0).toStringAsFixed(2),
-                  (double.tryParse(item['totalPrice'].toString()) ?? 0.0).toStringAsFixed(2),
+                  total,
+                  price,
+                  quantity,
+                  productName,
+                  (i + 1).toString().padLeft(2, '0') // ✅ Serial number
                 ];
-              }).toList(),
+              }),
               headerStyle: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold),
               cellStyle: pw.TextStyle(font: ttf),
               cellAlignment: pw.Alignment.center,
               border: pw.TableBorder.all(width: 0.5),
             ),
+
             pw.SizedBox(height: 20),
 
-            // Totals
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.end,
               children: [
                 pw.Text(
-                  "المجموع: ${(double.tryParse(invoice['total'].toString()) ?? 0.0).toStringAsFixed(2)} دج",
+                  "المجموع: ${(double.tryParse(invoice['total']?.toString() ?? '') ?? 0.0).toStringAsFixed(2)} دج",
                   style: pw.TextStyle(font: ttf, fontSize: 16, fontWeight: pw.FontWeight.bold),
                 ),
               ],
@@ -80,7 +91,6 @@ Future<pw.Document> generateInvoicePdf(
 
   return pdf;
 }
-
 
 
 
@@ -131,14 +141,10 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
       invoices = data;
       _generateDateFilters();
       for (var invoice in invoices) {
-        if (invoice['profit'] != null) {
-          totalProfit += double.tryParse(invoice['profit'].toString()) ?? 0;
-        }
+        totalProfit += double.tryParse(invoice['profit']?.toString() ?? '') ?? 0;
       }
       for (var cust in All_customers) {
-        if (cust['debt'] != null) {
-          totalDebts += double.tryParse(cust['debt'].toString()) ?? 0;
-        }
+        totalDebts += double.tryParse(cust['debt']?.toString() ?? '') ?? 0;
       }
     });
   }
@@ -149,7 +155,7 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
     final Set<int> daySet = {};
 
     for (var item in All_invoices) {
-      final date = DateTime.tryParse(item['date']);
+      final date = DateTime.tryParse(item['date']?.toString() ?? '');
       if (date != null) {
         yearSet.add(date.year);
         monthSet.add(date.month);
@@ -165,7 +171,7 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   void _filterByDate() {
     setState(() {
       invoices = All_invoices.where((item) {
-        final date = DateTime.tryParse(item['date']);
+        final date = DateTime.tryParse(item['date']?.toString() ?? '');
         if (date == null) return false;
 
         if (selectedYear != null && date.year != selectedYear) return false;
@@ -180,9 +186,7 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
 
       totalProfit = 0;
       for (var invoice in invoices) {
-        if (invoice['profit'] != null) {
-          totalProfit += double.tryParse(invoice['profit'].toString()) ?? 0;
-        }
+        totalProfit += double.tryParse(invoice['profit']?.toString() ?? '') ?? 0;
       }
     });
   }
@@ -191,115 +195,82 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
     final query = searchController.text.toLowerCase();
 
     if (query.isEmpty) {
-      totalProfit = 0;
-      setState(() => invoices = List.from(All_invoices));
-      for (var invoice in invoices) {
-        if (invoice['profit'] != null) {
-          totalProfit += double.tryParse(invoice['profit'].toString()) ?? 0;
-        }
-      }
+      setState(() {
+        invoices = List.from(All_invoices);
+        totalProfit = invoices.fold(0, (sum, inv) => sum + (double.tryParse(inv['profit']?.toString() ?? '') ?? 0));
+      });
       return;
     }
 
     final filtered = All_invoices.where((item) {
-      final date = item['date'].toString().toLowerCase();
+      final date = item['date']?.toString().toLowerCase() ?? '';
       final customer = item['customer_name']?.toString().toLowerCase() ?? '';
       return date.contains(query) || customer.contains(query);
     }).toList();
 
-    totalProfit = 0;
-    for (var invoice in filtered) {
-      if (invoice['profit'] != null) {
-        totalProfit += double.tryParse(invoice['profit'].toString()) ?? 0;
-      }
-    }
-
+    totalProfit = filtered.fold(0, (sum, inv) => sum + (double.tryParse(inv['profit']?.toString() ?? '') ?? 0));
     invoices = filtered;
     setState(() {});
   }
 
+  /// ✅ Visibility toggles remain unchanged
   void _toggleVisibility() async {
     if (_isAuth) {
-      _isAuth = !_isAuth;
-      _obscureText = !_obscureText;
-      setState(() {});
+      setState(() {
+        _isAuth = !_isAuth;
+        _obscureText = !_obscureText;
+      });
       return;
     }
-    String? password = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        TextEditingController passController = TextEditingController();
-        return AlertDialog(
-          title: const Text("Enter password"),
-          content: TextField(
-            controller: passController,
-            obscureText: true,
-            decoration: const InputDecoration(hintText: "Password"),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel")),
-            TextButton(
-                onPressed: () => Navigator.pop(context, passController.text),
-                child: const Text("OK")),
-          ],
-        );
-      },
-    );
-
+    String? password = await _showPasswordDialog();
     if (password == '1234') {
       setState(() {
         _obscureText = false;
         _isAuth = !_isAuth;
       });
     } else if (password != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Wrong password")),
-      );
+      _showError("Wrong password");
     }
   }
 
   void _toggleVisibilityCust() async {
     if (_isAuthCusy) {
-      _isAuthCusy = !_isAuthCusy;
-      _obscureTextCust = !_obscureTextCust;
-      setState(() {});
+      setState(() {
+        _isAuthCusy = !_isAuthCusy;
+        _obscureTextCust = !_obscureTextCust;
+      });
       return;
     }
-    String? password = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        TextEditingController passController = TextEditingController();
-        return AlertDialog(
-          title: const Text("Enter password"),
-          content: TextField(
-            controller: passController,
-            obscureText: true,
-            decoration: const InputDecoration(hintText: "Password"),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel")),
-            TextButton(
-                onPressed: () => Navigator.pop(context, passController.text),
-                child: const Text("OK")),
-          ],
-        );
-      },
-    );
-
+    String? password = await _showPasswordDialog();
     if (password == '1234') {
       setState(() {
         _obscureTextCust = false;
         _isAuthCusy = !_isAuthCusy;
       });
     } else if (password != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Wrong password")),
-      );
+      _showError("Wrong password");
     }
+  }
+
+  Future<String?> _showPasswordDialog() async {
+    return await showDialog<String>(
+      context: context,
+      builder: (context) {
+        TextEditingController passController = TextEditingController();
+        return AlertDialog(
+          title: const Text("Enter password"),
+          content: TextField(controller: passController, obscureText: true),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            TextButton(onPressed: () => Navigator.pop(context, passController.text), child: const Text("OK")),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _pickStartDate() async {
@@ -344,6 +315,7 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
 
   @override
   Widget build(BuildContext context) {
+    setState(() {});
     final dateFormatter = DateFormat('yyyy-MM-dd');
 
     return Scaffold(
@@ -353,264 +325,208 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: TextField(
-                controller: searchController,
-                decoration: InputDecoration(
-                  hintText: "ابحث",
-                  filled: true,
-                  fillColor: MyColors.secondColor(context),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  prefixIcon: Icon(Icons.search, color: MyColors.mainColor(context)),
-                ),
-              ),
-            ),
+            _buildSearchBar(),
             const SizedBox(height: 10),
-
-            /// Profit & Filters Row
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: MyColors.secondColor(context),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: SizedBox(
-                          height: 50,
-                          width: 300,
-                          child: Row(
-                            children: [
-                              const Text(" دج ", style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              )),
-                              Expanded(
-                                child: TextField(
-                                    controller: TextEditingController(text: totalProfit.toStringAsFixed(2)),
-                                    readOnly: true, 
-                                    obscureText: _obscureText,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    decoration: const InputDecoration(
-                                      border: InputBorder.none, 
-                                    ),
-                                  ),
-
-                              ),
-                              const Text(" الربح الكلي: ", style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                
-                              )),
-                              const SizedBox(width: 10),
-                              IconButton(
-                                icon: Icon(
-                                  _obscureText ? Icons.visibility : Icons.visibility_off,
-                                  size: 30,
-                                ),
-                                onPressed: _toggleVisibility,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 10,),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: MyColors.secondColor(context),
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: SizedBox(
-                              height: 50,
-                              width: 300,
-                              child: Row(
-                                children: [
-                                  const Text(" دج ", style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                  )),
-                                  Expanded(
-                                    child: TextField(
-                                        controller: TextEditingController(text: totalDebts.toStringAsFixed(2)),
-                                        readOnly: true, 
-                                        obscureText: _obscureTextCust,
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        decoration: const InputDecoration(
-                                          border: InputBorder.none, 
-                                        ),
-                                      ),
-                          
-                                  ),
-                                  const Text("  مجموع الديون: ", style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    
-                                  )),
-                                  const SizedBox(width: 10),
-                                  IconButton(
-                                    icon: Icon(
-                                      _obscureTextCust ? Icons.visibility : Icons.visibility_off,
-                                      size: 30,
-                                    ),
-                                    onPressed: _toggleVisibilityCust,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          DropdownButton<int>(
-                            value: selectedYear,
-                            hint: const Text("السنة"),
-                            items: years.map((year) {
-                              return DropdownMenuItem(value: year, child: Text(year.toString()));
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() => selectedYear = value);
-                              _filterByDate();
-                            },
-                          ),
-                          DropdownButton<int>(
-                            value: selectedMonth,
-                            hint: const Text("الشهر"),
-                            items: months.map((month) {
-                              return DropdownMenuItem(value: month, child: Text(month.toString()));
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() => selectedMonth = value);
-                              _filterByDate();
-                            },
-                          ),
-                          DropdownButton<int>(
-                            value: selectedDay,
-                            hint: const Text("اليوم"),
-                            items: days.map((day) {
-                              return DropdownMenuItem(value: day, child: Text(day.toString()));
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() => selectedDay = value);
-                              _filterByDate();
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      ElevatedButton(
-                        onPressed: _pickStartDate,
-                        child: Text(startDate == null
-                            ? "اختر تاريخ البداية"
-                            : "من: ${dateFormatter.format(startDate!)}"),
-                      ),
-                      SizedBox(width: 10,),
-                      ElevatedButton(
-                        onPressed: _pickEndDate,
-                        child: Text(endDate == null
-                            ? "اختر تاريخ النهاية"
-                            : "إلى: ${dateFormatter.format(endDate!)}"),
-                      ),
-                    ],
-                  )
-                ],
-              ),
-            ),
+            _buildProfitAndFilters(dateFormatter),
             const SizedBox(height: 10),
-
-            /// Invoices List
-            (invoices.isNotEmpty)
-                ? Flexible(
-                    child: ListView.builder(
-                      itemCount: invoices.length,
-                      itemBuilder: (context, index) {
-                        final invoice = invoices[index];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: ExpansionTile(
-                            title: Text(
-                              "فاتورة #${invoice['id']} - ${invoice['date']}"
-                              "${invoice['customer_name'] != null ? ' -- ${invoice['customer_name']} الزبون--' : '--زائر--'}",
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text("المجموع: ${(double.tryParse(invoice['total'].toString()) ?? 0.0).toStringAsFixed(2)} DA"),
-                            children: [
-                              FutureBuilder<List<Map<String, dynamic>>>(
-                                future: DInvoiceItemsTable().getItemsByInvoiceId(invoice['id']),
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData) {
-                                    return const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: CircularProgressIndicator(),
-                                    );
-                                  }
-                                  final items = snapshot.data!;
-                                  if (items.isEmpty) {
-                                    return const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: Text("لا توجد منتجات في هذه الفاتورة"),
-                                    );
-                                  }
-                                  return Column(
-                                    children: [
-                                      Column(
-                                        children: items.map((item) {
-                                          return ListTile(
-                                            title: Text("${item['productName']}"),
-                                            subtitle: Text("الكود: ${item['productCodeBar']} - الكمية: ${item['quantity']}"),
-                                            trailing: Text("${(double.tryParse(item['totalPrice'].toString()) ?? 0.0).toStringAsFixed(2)} DA"),
-                                            
-                                          );
-                                      
-                                        }).toList(),
-                                      ),
-                                      ElevatedButton.icon(
-                                        onPressed: () async {
-                                          final pdf = await generateInvoicePdf(invoice, items);
-                                          await Printing.layoutPdf(
-                                            onLayout: (PdfPageFormat format) async => pdf.save(),
-                                          );
-                                        },
-                                        icon: const Icon(Icons.picture_as_pdf),
-                                        label: const Text("حفظ PDF"),
-                                      ),
-                                      SizedBox(height: 10,)
-                                    ],
-                                  );
-                                  
-                                },
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  )
-                : const Center(child: Text("لا توجد فواتير حتى الآن")),
+            _buildInvoicesList(),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: TextField(
+        controller: searchController,
+        decoration: InputDecoration(
+          hintText: "ابحث",
+          filled: true,
+          fillColor: MyColors.secondColor(context),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          prefixIcon: Icon(Icons.search, color: MyColors.mainColor(context)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfitAndFilters(DateFormat dateFormatter) {
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildTotals(),
+              _buildDropdownFilters(),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ElevatedButton(
+                onPressed: _pickStartDate,
+                child: Text(startDate == null ? "اختر تاريخ البداية" : "من: ${dateFormatter.format(startDate!)}"),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: _pickEndDate,
+                child: Text(endDate == null ? "اختر تاريخ النهاية" : "إلى: ${dateFormatter.format(endDate!)}"),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTotals() {
+    return Column(
+      children: [
+        //_buildTotalField("الربح الكلي", totalProfit, _obscureText, _toggleVisibility),
+       // const SizedBox(height: 10),
+       // _buildTotalField("مجموع الديون", totalDebts, _obscureTextCust, _toggleVisibilityCust),
+      ],
+    );
+  }
+
+  Widget _buildTotalField(String label, double value, bool obscure, VoidCallback toggle) {
+    return Container(
+      decoration: BoxDecoration(color: MyColors.secondColor(context), borderRadius: BorderRadius.circular(15)),
+      child: SizedBox(
+        height: 50,
+        width: 300,
+        child: Row(
+          children: [
+            const Text(" دج ", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            Expanded(
+              child: TextField(
+                controller: TextEditingController(text: value.toStringAsFixed(2)),
+                readOnly: true,
+                obscureText: obscure,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                decoration: const InputDecoration(border: InputBorder.none),
+              ),
+            ),
+            Text(" $label: ", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 10),
+            IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off, size: 30), onPressed: toggle),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownFilters() {
+    return Row(
+      children: [
+        DropdownButton<int>(
+          value: selectedYear,
+          hint: const Text("السنة"),
+          items: years.map((year) => DropdownMenuItem(value: year, child: Text(year.toString()))).toList(),
+          onChanged: (value) {
+            setState(() => selectedYear = value);
+            _filterByDate();
+          },
+        ),
+        DropdownButton<int>(
+          value: selectedMonth,
+          hint: const Text("الشهر"),
+          items: months.map((month) => DropdownMenuItem(value: month, child: Text(month.toString()))).toList(),
+          onChanged: (value) {
+            setState(() => selectedMonth = value);
+            _filterByDate();
+          },
+        ),
+        DropdownButton<int>(
+          value: selectedDay,
+          hint: const Text("اليوم"),
+          items: days.map((day) => DropdownMenuItem(value: day, child: Text(day.toString()))).toList(),
+          onChanged: (value) {
+            setState(() => selectedDay = value);
+            _filterByDate();
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInvoicesList() {
+    return invoices.isNotEmpty
+        ? Flexible(
+            child: ListView.builder(
+              itemCount: invoices.length,
+              itemBuilder: (context, index) {
+                final invoice = invoices[index];
+                final date = invoice['date']?.toString() ?? 'غير محدد';
+                final customer = invoice['customer_name']?.toString().isNotEmpty == true
+                    ? invoice['customer_name']
+                    : 'زائر';
+
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ExpansionTile(
+                    title: Text(
+                      "فاتورة رقم${invoice['id'] ?? '-'} - $date -- $customer",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      "المجموع: ${(double.tryParse(invoice['total']?.toString() ?? '') ?? 0.0).toStringAsFixed(2)} DA",
+                    ),
+                    children: [
+                      FutureBuilder<List<Map<String, dynamic>>>(
+                        future: DInvoiceItemsTable().getItemsByInvoiceId(invoice['id']),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          final items = snapshot.data!;
+                          if (items.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Text("لا توجد منتجات في هذه الفاتورة"),
+                            );
+                          }
+                          return Column(
+                            children: [
+                              Column(
+                                children: items.map((item) {
+                                  return ListTile(
+                                    title: Text(item['productName']?.toString() ?? "غير محدد"),
+                                    subtitle: Text(
+                                        "الكود: ${item['productCodeBar'] ?? '-'} - الكمية: ${item['quantity'] ?? '0'}"),
+                                    trailing: Text(
+                                      "${(double.tryParse(item['totalPrice']?.toString() ?? '') ?? 0.0).toStringAsFixed(2)} DA",
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: () async {
+                                  final pdf = await generateInvoicePdf(invoice, items);
+                                  await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+                                },
+                                icon: const Icon(Icons.picture_as_pdf),
+                                label: const Text("حفظ PDF"),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          )
+        : const Center(child: Text("لا توجد فواتير حتى الآن"));
   }
 }
