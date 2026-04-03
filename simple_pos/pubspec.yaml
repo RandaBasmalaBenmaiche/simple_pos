@@ -31,8 +31,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-  - assets/icons/
-  - assets/fonts/NotoNaskhArabic-VariableFont_wght.ttf
+    - assets\icons\
+    - assets\fonts\NotoNaskhArabic-VariableFont_wght.ttf
 
 
 
