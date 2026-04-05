@@ -12,9 +12,6 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: simple_pos
     steps:
       - uses: actions/checkout@v4
 
@@ -23,7 +20,14 @@ jobs:
           channel: 'stable'
 
       - run: flutter pub get
-      - run: flutter build web --release --base-href "/simple_pos/"
+        working-directory: simple_pos
+
+      - run: |
+          flutter build web --release --base-href "/simple_pos/" \
+          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+          --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+          --dart-define=SUPABASE_AUTH_EMAIL=${{ secrets.SUPABASE_AUTH_EMAIL }}
+        working-directory: simple_pos
 
       - uses: peaceiris/actions-gh-pages@v3
         with:
