@@ -119,6 +119,10 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   List<int> months = [];
   List<int> days = [];
 
+  // Admin password for viewing profit/debts
+  // Change this to your desired password
+  static const _adminPassword = '1234';
+
   bool _obscureText = true;
   bool _isAuth = false;
 
@@ -174,12 +178,22 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
         final date = DateTime.tryParse(item['date']?.toString() ?? '');
         if (date == null) return false;
 
+        // Normalize dates to compare only date portions (ignore time)
+        final invoiceDate = DateTime(date.year, date.month, date.day);
+
         if (selectedYear != null && date.year != selectedYear) return false;
         if (selectedMonth != null && date.month != selectedMonth) return false;
         if (selectedDay != null && date.day != selectedDay) return false;
 
-        if (startDate != null && date.isBefore(startDate!)) return false;
-        if (endDate != null && date.isAfter(endDate!)) return false;
+        // Compare date ranges using normalized dates (start of day for startDate, end of day for endDate)
+        if (startDate != null) {
+          final startOfDay = DateTime(startDate!.year, startDate!.month, startDate!.day);
+          if (invoiceDate.isBefore(startOfDay)) return false;
+        }
+        if (endDate != null) {
+          final endOfDay = DateTime(endDate!.year, endDate!.month, endDate!.day, 23, 59, 59);
+          if (invoiceDate.isAfter(endOfDay)) return false;
+        }
 
         return true;
       }).toList();
@@ -223,13 +237,13 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
       return;
     }
     String? password = await _showPasswordDialog();
-    if (password == '1234') {
+    if (password == _adminPassword) {
       setState(() {
         _obscureText = false;
         _isAuth = !_isAuth;
       });
     } else if (password != null) {
-      _showError("Wrong password");
+      _showError("كلمة المرور غير صحيحة");
     }
   }
 
@@ -242,31 +256,36 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
       return;
     }
     String? password = await _showPasswordDialog();
-    if (password == '1234') {
+    if (password == _adminPassword) {
       setState(() {
         _obscureTextCust = false;
         _isAuthCusy = !_isAuthCusy;
       });
     } else if (password != null) {
-      _showError("Wrong password");
+      _showError("كلمة المرور غير صحيحة");
     }
   }
 
   Future<String?> _showPasswordDialog() async {
-    return await showDialog<String>(
+    final TextEditingController passController = TextEditingController();
+    final result = await showDialog<String>(
       context: context,
       builder: (context) {
-        TextEditingController passController = TextEditingController();
         return AlertDialog(
-          title: const Text("Enter password"),
+          title: const Text("أدخل كلمة المرور"),
           content: TextField(controller: passController, obscureText: true),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-            TextButton(onPressed: () => Navigator.pop(context, passController.text), child: const Text("OK")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+            TextButton(
+              onPressed: () => Navigator.pop(context, passController.text),
+              child: const Text("دخول"),
+            ),
           ],
         );
       },
     );
+    passController.dispose();
+    return result;
   }
 
   void _showError(String message) {
@@ -315,7 +334,6 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
 
   @override
   Widget build(BuildContext context) {
-    setState(() {});
     final dateFormatter = DateFormat('yyyy-MM-dd');
 
     return Scaffold(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:data_table_2/data_table_2.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 
-class POSItemsTable extends StatelessWidget {
+class POSItemsTable extends StatefulWidget {
   final List<Map<String, dynamic>> items;
   final VoidCallback sellItems;
   final Function(int index, String newQuantity) onQuantityChanged;
@@ -15,6 +15,57 @@ class POSItemsTable extends StatelessWidget {
     required this.onQuantityChanged,
     required this.onDelete,
   });
+
+  @override
+  State<POSItemsTable> createState() => _POSItemsTableState();
+}
+
+class _POSItemsTableState extends State<POSItemsTable> {
+  final Map<String, TextEditingController> _controllers = {};
+
+  String _itemKey(Map<String, dynamic> item, int index) {
+    final id = item['id'];
+    if (id != null) {
+      return 'id:$id';
+    }
+    final code = item['productCodeBar']?.toString() ?? '';
+    final name = item['productName']?.toString() ?? '';
+    return 'row:$index:$code:$name';
+  }
+
+  @override
+  void didUpdateWidget(covariant POSItemsTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Build a set of current item IDs
+    final currentIds = <String>{};
+    for (int i = 0; i < widget.items.length; i++) {
+      currentIds.add(_itemKey(widget.items[i], i));
+    }
+    // Clean up controllers for removed items
+    final keysToRemove = _controllers.keys.where((id) => !currentIds.contains(id)).toList();
+    for (final key in keysToRemove) {
+      _controllers[key]?.dispose();
+      _controllers.remove(key);
+    }
+    // Update controller text for existing items to reflect quantity changes
+    for (int i = 0; i < widget.items.length; i++) {
+      final itemId = _itemKey(widget.items[i], i);
+      if (_controllers.containsKey(itemId)) {
+        final itemQty = widget.items[i]['productQuantity']?.toString() ?? '0';
+        if (_controllers[itemId]!.text != itemQty) {
+          _controllers[itemId]!.text = itemQty;
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,34 +91,35 @@ class POSItemsTable extends StatelessWidget {
           DataColumn2(label: Text("الكود"), size: ColumnSize.L),
           DataColumn2(label: Text(""), size: ColumnSize.S), // delete column
         ],
-        rows: List.generate(items.length, (index) {
-          final item = items[index];
+        rows: List.generate(widget.items.length, (index) {
+          final item = widget.items[index];
+          final itemId = _itemKey(item, index);
 
-          return 
-          DataRow(
+          // Null-safe accessors with defaults
+          final total = item['total']?.toString() ?? '0.00';
+          final price = item['productPrice']?.toString() ?? '0.00';
+          final quantity = item['productQuantity']?.toString() ?? '0';
+          final productName = item['productName']?.toString() ?? 'بدون اسم';
+          final productCodeBar = item['productCodeBar']?.toString() ?? '-';
+
+          return DataRow(
             cells: [
-              DataCell(Text(item['total'],
+              DataCell(Text(total,
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 20))),
-              DataCell(Text(item['productPrice'],
+              DataCell(Text(price,
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 20))),
               DataCell(
                 SizedBox(
                   width: 60,
                   child: TextField(
-                    // instead of creating a controller, use initial value directly
-                    controller: TextEditingController.fromValue(
-                      TextEditingValue(
-                        text: item['productQuantity'].toString(),
-                        selection: TextSelection.collapsed(
-                          offset: item['productQuantity'].toString().length,
-                        ),
-                      ),
-                    ),
+                    controller: _controllers.putIfAbsent(itemId, () => TextEditingController(
+                      text: quantity,
+                    )),
                     keyboardType: TextInputType.number,
                     onChanged: (value) {
-                      onQuantityChanged(index, value); // update live
+                      widget.onQuantityChanged(index, value); // update live
                     },
                     decoration: const InputDecoration(
                       isDense: true,
@@ -77,16 +129,16 @@ class POSItemsTable extends StatelessWidget {
                   ),
                 ),
               ),
-              DataCell(Text(item['productName'].toString(),
+              DataCell(Text(productName,
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 20))),
-              DataCell(Text(item['productCodeBar'].toString(),
+              DataCell(Text(productCodeBar,
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 20))),
               DataCell(
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => onDelete(index),
+                  onPressed: () => widget.onDelete(index),
                 ),
               ),
             ],

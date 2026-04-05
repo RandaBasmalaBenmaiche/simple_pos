@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:simple_pos/components/AutoComplete.dart';
+import 'package:simple_pos/components/clientSelector.dart';
 import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/components/alphaNumericInputField.dart';
 import 'package:simple_pos/components/paying.dart';
@@ -28,7 +29,6 @@ class _POSPageState extends State<POSPage> {
   final TextEditingController codeController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
-  final TextEditingController customerController = TextEditingController();
   final TextEditingController payingController = TextEditingController();
 
   List<Map<String, dynamic>> items = [];
@@ -39,11 +39,14 @@ class _POSPageState extends State<POSPage> {
   final FocusNode keyboardFocusNode = FocusNode();
 
   List<String> allItems = [];
-  List<String> allCustomers = [];
 
   bool autoMode = true;
   bool quantity = true;
   int lastFcous = 0; // 0 for code, 1 for name
+  int? _previousStoreId; // Track store to clear cart on switch
+
+  // Selected client info
+  Map<String, dynamic>? _selectedClient;
 
   void addItem(int store) async {
     bool isName = false;
@@ -66,6 +69,7 @@ class _POSPageState extends State<POSPage> {
     }
 
     if (product == null) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -87,29 +91,68 @@ class _POSPageState extends State<POSPage> {
     final name = product['productName']?.toString() ?? 'بدون اسم';
     final price = double.tryParse(product['productPrice']?.toString() ?? '') ?? 0.0;
     final buyingPrice = double.tryParse(product['productBuyingPrice']?.toString() ?? '0') ?? 0.0;
+    final availableStock = int.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
+
+    // Check if requested quantity exceeds available stock
+    if (quantity > availableStock) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("خطأ"),
+          content: Text("الكمية المطلوبة ($quantity) تفوق الكمية المتوفرة ($availableStock)"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("حسناً"),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     codeController.text = codeBar;
     nameController.text = name;
 
     // Check if already in invoice
-    var existIndex;
-    if(!isName){
-        existIndex = items.indexWhere((p) => p['productCodeBar'] == codeBar && !isName);
-    }
-    else{
-    existIndex = items.indexWhere((p) => p['productName'] == codeBar && isName);
-    }
-    if (existIndex != -1) {
-      items[existIndex]['productQuantity'] =
-          (int.parse(items[existIndex]['productQuantity']) + quantity).toString();
-      items[existIndex]['total'] =
-          (int.parse(items[existIndex]['productQuantity']) *
-                  double.parse(items[existIndex]['productPrice']))
-              .toStringAsFixed(2);
+    var existIndex = items.indexWhere((p) =>
+      isName
+        ? p['productName'] == name
+        : p['productCodeBar'] == codeBar
+    );
 
-      _clearInputs();
-      _updateTotal();
-      setState(() {});
+    if (existIndex != -1) {
+      final currentQty = int.tryParse(items[existIndex]['productQuantity']?.toString() ?? '0') ?? 0;
+      final newQty = currentQty + quantity;
+      // Check if combined quantity exceeds stock
+      if (newQty > availableStock) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("خطأ"),
+            content: Text("الكمية في السلة تفوق الكمية المتوفرة ($availableStock)"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text("حسناً"),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      // Create a new list with a new Map for the updated item to trigger Flutter's diffing
+      final updatedItem = Map<String, dynamic>.from(items[existIndex]);
+      updatedItem['productQuantity'] = newQty.toString();
+      updatedItem['total'] = (newQty * price).toStringAsFixed(2);
+
+      setState(() {
+        items[existIndex] = updatedItem;
+        _clearInputs();
+        _updateTotal();
+      });
       return;
     }
 
@@ -123,6 +166,7 @@ class _POSPageState extends State<POSPage> {
       "productQuantity": quantity.toString(),
       "total": itemTotal.toStringAsFixed(2),
     };
+    if (!mounted) return;
     setState(() {
       items.add(item);
       total += itemTotal;
@@ -139,7 +183,10 @@ class _POSPageState extends State<POSPage> {
   void _updateTotal() {
     total = items.fold<double>(
       0.0,
-      (sum, item) => sum + (double.tryParse(item['total'].toString()) ?? 0.0),
+      (sum, item) {
+        final itemTotal = double.tryParse(item['total']?.toString() ?? '0') ?? 0.0;
+        return sum + itemTotal;
+      },
     );
   }
 
@@ -154,21 +201,39 @@ class _POSPageState extends State<POSPage> {
     };
 
     // Attach customer if chosen
-    if (customerController.text.isNotEmpty) {
-      final cus =
-          await DCustomersTable().getCustomerByName(customerController.text, store);
-      if (cus.isNotEmpty) {
-        inv.addAll({
-          "customer_id": cus[0]["id"],
-          "customer_name": cus[0]["name"],
-        });
-      }
+    if (_selectedClient != null) {
+      inv.addAll({
+        "customer_id": _selectedClient!["id"],
+        "customer_name": _selectedClient!["name"],
+      });
     }
 
     // 1. Insert invoice
     final invoiceId = await DInvoiceTable().custinsertRecord(inv);
+    if (invoiceId == null) return;
 
-    // 2. Insert invoice items
+    // 2. Update stock FIRST (inside transaction to prevent race conditions)
+    // This ensures stock is reserved before inserting invoice items
+    for (var item in items) {
+      final product =
+          await DStockTable().getProductByCode(item['productCodeBar'] ?? '', store);
+      if (product != null) {
+        int currentQuantity =
+            int.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
+        int qty = int.tryParse(item['productQuantity']?.toString() ?? '0') ?? 0;
+        // Skip item if not enough stock
+        if (qty > currentQuantity) {
+          continue;
+        }
+        await DStockTable().updateProduct(
+          codeBar: product['productCodeBar'] ?? '',
+          storeId: store,
+          newQuantity: (currentQuantity - qty).toString(),
+        );
+      }
+    }
+
+    // 3. Insert invoice items after stock is reserved
     for (var item in items) {
       double price = double.tryParse(item['productPrice']?.toString() ?? '0') ?? 0;
       double buyingPrice =
@@ -177,7 +242,7 @@ class _POSPageState extends State<POSPage> {
       double profit = (price - buyingPrice) * qty;
 
       totalProfit += profit;
-      await DInvoiceItemsTable().insertRecord({
+      await DInvoiceItemsTable().insertItem({
         "invoice_id": invoiceId,
         "productCodeBar": item['productCodeBar'] ?? '',
         "productName": item['productName'] ?? 'بدون اسم',
@@ -187,47 +252,31 @@ class _POSPageState extends State<POSPage> {
         "totalPrice":
             double.tryParse(item['total']?.toString() ?? '0') ?? 0.0,
       });
-
-      // 3. Update stock
-      final product =
-          await DStockTable().getProductByCode(item['productCodeBar'] ?? '', store);
-      if (product != null) {
-        int currentQuantity =
-            int.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
-        int newQuantity = currentQuantity - qty;
-        if (newQuantity < 0) newQuantity = 0;
-        await DStockTable().updateProduct(
-          codeBar: product['productCodeBar'] ?? '',
-          storeId: store,
-          newQuantity: newQuantity.toString(),
-        );
-      }
-
-      // 4. Update profit in invoice
-      await DInvoiceTable().updateInvoice(id: invoiceId ?? 0, profit: totalProfit);
     }
 
-    // 5. Reseting the debt
-    await DInvoiceTable().resetDebt(invoiceId: invoiceId??0);
+    // 4. Update profit in invoice once (after loop)
+    await DInvoiceTable().updateInvoice(id: invoiceId, profit: totalProfit);
+
+    // 5. Reset the debt
+    await DInvoiceTable().resetDebt(invoiceId: invoiceId);
 
     // 6. Clear invoice
+    if (!mounted) return;
     setState(() {
       items.clear();
       total = 0;
-      customerController.clear();
+      _selectedClient = null;
     });
   }
 
   Future<void> _loadItems() async {
-    final rawItems = await DStockTable().getRecords();
-    final rawCustomers = await DCustomersTable().getRecords();
+    final currentStoreId = BlocProvider.of<StoreCubit>(context, listen: false).state;
+    final rawItems = await DStockTable().getProductsByStore(currentStoreId);
 
     setState(() {
       allItems = rawItems
           .map((item) => item["productName"]?.toString() ?? 'بدون اسم')
           .toList();
-      allCustomers =
-          rawCustomers.map((item) => item["name"]?.toString() ?? 'مجهول').toList();
     });
   }
 
@@ -241,12 +290,29 @@ class _POSPageState extends State<POSPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final currentStoreId = context.watch<StoreCubit>().state;
+    // Clear cart and reload items when switching stores
+    if (_previousStoreId != null && _previousStoreId != currentStoreId) {
+      setState(() {
+        items.clear();
+        total = 0;
+        _selectedClient = null;
+      });
+      _loadItems();
+    }
+    _previousStoreId = currentStoreId;
+  }
+
+  @override
   void dispose() {
     codeController.dispose();
     nameController.dispose();
     quantityController.dispose();
-    customerController.dispose();
+    payingController.dispose();
     codeFocusNode.dispose();
+    nameFocusNode.dispose();
     quantityFocusNode.dispose();
     keyboardFocusNode.dispose();
     super.dispose();
@@ -366,11 +432,17 @@ class _POSPageState extends State<POSPage> {
                     focusNode: nameFocusNode,
                   ),
                   const SizedBox(width: 16),
-                  AutoCompleteInputField(
-                    controller: customerController,
-                    label: "الزبون",
-                    isAlphanumeric: true,
-                    suggestions: allCustomers,
+                  Expanded(
+                    flex: 2,
+                    child: ClientSelector(
+                      storeId: currentStoreId,
+                      onClientSelected: (client) {
+                        setState(() {
+                          _selectedClient = client;
+                        });
+                      },
+                      initialClient: _selectedClient,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   NumericInputField(
@@ -386,7 +458,6 @@ class _POSPageState extends State<POSPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
               Flexible(
                 child: SizedBox(
                   height: MediaQuery.of(context).size.height * 0.6,
@@ -436,7 +507,7 @@ class _POSPageState extends State<POSPage> {
                         CustomActionButton(
                           text: " بيع مجزئ",
                           onPressed: () async {
-                            if (customerController.text.isEmpty) {
+                            if (_selectedClient == null) {
                               showDialog(
                                   context: context,
                                   builder: (BuildContext context) {
@@ -456,15 +527,18 @@ class _POSPageState extends State<POSPage> {
                             } else {
                               showPayingAmountDialog(
                                   context, payingController, (amount) async {
-                                final cus =
-                                    await DCustomersTable().getCustomerByName(
-                                        customerController.text,
-                                        currentStoreId);
                                 await DCustomersTable().updateCustomer(
-                                    id: cus[0]["id"],
-                                    debt: (cus[0]["debt"] ?? 0) +
-                                        (total - amount));
+                                    id: _selectedClient!["id"],
+                                    debt: (_selectedClient!["debt"] ?? 0) + (total - amount));
                                 await sellItems(currentStoreId);
+                                if (mounted) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (context) =>
+                                            const POSPageHistorique()),
+                                  );
+                                }
                               });
                             }
                           },
@@ -474,12 +548,14 @@ class _POSPageState extends State<POSPage> {
                           text: "بيع",
                           onPressed: () async {
                             await sellItems(currentStoreId);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) =>
-                                      const POSPageHistorique()),
-                            );
+                            if (mounted) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        const POSPageHistorique()),
+                              );
+                            }
                           },
                         ),
                       ],

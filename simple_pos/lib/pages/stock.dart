@@ -1,7 +1,8 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
+import 'package:flutter/foundation.dart';
 import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/components/addProductDialog.dart';
 import 'package:simple_pos/components/sellButton.dart';
@@ -9,8 +10,10 @@ import 'package:simple_pos/components/stockTable.dart';
 import 'package:simple_pos/components/updateProductDialog.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
+import 'package:simple_pos/services/platform/file_text.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:simple_pos/main.dart';
 
 class POSPageStock extends StatefulWidget {
   const POSPageStock({Key? key}) : super(key: key);
@@ -19,30 +22,51 @@ class POSPageStock extends StatefulWidget {
   _POSPageState createState() => _POSPageState();
 }
 
-class _POSPageState extends State<POSPageStock> {
+class _POSPageState extends State<POSPageStock> with RouteAware {
   List<Map<String, dynamic>> items = [];
   List<Map<String, dynamic>> allItems = [];
   TextEditingController searchController = TextEditingController();
+  late final DStockTable _stockTable;
+  late int _currentStoreId;
+
+  // Add this RouteObserver to your app — declare it globally
+  // e.g. in main.dart: final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+  // and add it to MaterialApp: navigatorObservers: [routeObserver]
+  // then import it here
 
   @override
   void initState() {
     super.initState();
-    final currentStoreId = BlocProvider.of<StoreCubit>(context, listen: false).state;
-    _loadItems(currentStoreId);
+    _stockTable = DStockTable();
+    _currentStoreId = BlocProvider.of<StoreCubit>(context, listen: false).state;
+    _loadItems(_currentStoreId);
     searchController.addListener(_onSearchChanged);
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route observer
+    routeObserver.subscribe(this, ModalRoute.of(context)! as PageRoute);
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     searchController.removeListener(_onSearchChanged);
     searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadItems(int store) async {
-    final rawItems = await DStockTable().getProductsByStore(store);
+  // Called when coming back to this page from another route
+  @override
+  void didPopNext() {
+    _loadItems(_currentStoreId);
+  }
 
-    // Add default values for null fields
+  Future<void> _loadItems(int store) async {
+    final rawItems = await _stockTable.getProductsByStore(store);
+
     final loadedItems = rawItems.map((item) {
       return {
         ...item,
@@ -53,10 +77,12 @@ class _POSPageState extends State<POSPageStock> {
       };
     }).toList();
 
-    setState(() {
-      items = loadedItems;
-      allItems = loadedItems;
-    });
+    if (mounted) {
+      setState(() {
+        items = loadedItems;
+        allItems = List.from(loadedItems);
+      });
+    }
   }
 
   void _onSearchChanged() {
@@ -76,21 +102,29 @@ class _POSPageState extends State<POSPageStock> {
     setState(() => items = filtered);
   }
 
-  // ================= Import CSV =================
   Future<void> importProductsFromCSV(int store) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
+      withData: true,
     );
 
-    if (result != null && result.files.single.path != null) {
-      final file = File(result.files.single.path!);
-      final csvString = await file.readAsString();
+    if (result != null) {
+      final picked = result.files.single;
+      String? csvString;
+
+      if (picked.bytes != null) {
+        csvString = utf8.decode(picked.bytes!);
+      } else if (picked.path != null) {
+        csvString = await readTextFile(picked.path!);
+      }
+
+      if (csvString == null) return;
       List<List<dynamic>> csvTable = const CsvToListConverter().convert(csvString);
 
       for (var i = 1; i < csvTable.length; i++) {
         var row = csvTable[i];
-        await DStockTable().insertRecord({
+        await _stockTable.insertRecord({
           'store_id': store,
           'productName': row[0].toString(),
           'productPrice': row[1]?.toString().isNotEmpty == true ? row[1].toString() : null,
@@ -107,9 +141,9 @@ class _POSPageState extends State<POSPageStock> {
     }
   }
 
-  // ================= Export CSV =================
   Future<void> exportProductsToCSV() async {
-    final allProducts = await DStockTable().getRecords();
+    final currentStore = BlocProvider.of<StoreCubit>(context, listen: false).state;
+    final allProducts = await _stockTable.getProductsByStore(currentStore);
     List<List<dynamic>> rows = [
       ['productName', 'productPrice', 'productBuyingPrice', 'productCodeBar', 'productQuantity']
     ];
@@ -126,6 +160,13 @@ class _POSPageState extends State<POSPageStock> {
 
     String csv = const ListToCsvConverter().convert(rows);
 
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('التصدير المباشر غير متاح حالياً على الويب')),
+      );
+      return;
+    }
+
     String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'اختر مكان حفظ الملف',
       fileName: 'products_export.csv',
@@ -134,9 +175,7 @@ class _POSPageState extends State<POSPageStock> {
     );
 
     if (outputFile != null) {
-      final file = File(outputFile);
-      await file.writeAsString(csv);
-
+      await writeTextFile(outputFile, csv);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تم تصدير المنتجات إلى $outputFile')),
       );
@@ -150,13 +189,20 @@ class _POSPageState extends State<POSPageStock> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<StoreCubit>().state;
+    if (_currentStoreId != store) {
+      _currentStoreId = store;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _loadItems(store);
+        }
+      });
+    }
     return Scaffold(
       appBar: const CustomPOSAppBar(showReturnButton: true),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Search bar
             Row(
               children: [
                 Expanded(
@@ -177,8 +223,6 @@ class _POSPageState extends State<POSPageStock> {
               ],
             ),
             const SizedBox(height: 20),
-
-            // Action buttons
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -186,8 +230,8 @@ class _POSPageState extends State<POSPageStock> {
                   CustomActionButton(
                     text: "اضافة للسلع",
                     onPressed: () {
-                      showAddProductDialog(context, (name, price, buyingPrice, quantity, code) async {
-                        await DStockTable().insertRecord({
+                      showAddProductDialog(context, (String name, String price, String buyingPrice, String quantity, String code) async {
+                        await _stockTable.insertRecord(<String, dynamic>{
                           "productName": name,
                           "store_id": store,
                           "productPrice": price.isNotEmpty ? price : null,
@@ -225,10 +269,7 @@ class _POSPageState extends State<POSPageStock> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // Table
             Flexible(
               child: SizedBox(
                 height: MediaQuery.of(context).size.height * 0.6,
@@ -237,16 +278,31 @@ class _POSPageState extends State<POSPageStock> {
                   sellItems: () {},
                   onQuantityChanged: (index, newQuantity) async {
                     final product = items[index];
+                    final productKeyId = product['id'];
 
                     setState(() {
                       items[index]["productQuantity"] = newQuantity;
+                      final allIndex =
+                          allItems.indexWhere((e) => e['id'] == productKeyId);
+                      if (allIndex != -1) allItems[allIndex]["productQuantity"] = newQuantity;
                     });
 
-                    await DStockTable().updateProduct(
-                      codeBar: product['productCodeBar'] ?? '',
-                      newQuantity: newQuantity.isNotEmpty ? newQuantity : null,
-                      storeId: store,
-                    );
+                    final productId = product['id'] as int?;
+                    final success = productId != null
+                        ? await _stockTable.updateProductById(
+                            id: productId,
+                            newQuantity:
+                                newQuantity.isNotEmpty ? newQuantity : null,
+                          )
+                        : await _stockTable.updateProduct(
+                            codeBar: product['productCodeBar'] ?? '',
+                            newQuantity:
+                                newQuantity.isNotEmpty ? newQuantity : null,
+                            storeId: store,
+                          );
+                    if (!success && mounted) {
+                      await _loadItems(store);
+                    }
                   },
                   onDelete: (index) async {
                     final confirm = await showDialog<bool>(
@@ -273,11 +329,23 @@ class _POSPageState extends State<POSPageStock> {
 
                     if (confirm == true) {
                       final product = items[index];
-                      await DStockTable().deleteProduct(product['productCodeBar'] ?? '', store);
-
-                      setState(() {
-                        items.removeAt(index);
-                      });
+                      final productId = product['id'] as int?;
+                      final success = productId != null
+                          ? await _stockTable.deleteProductById(productId)
+                          : await _stockTable.deleteProduct(
+                              product['productCodeBar'] ?? '',
+                              store,
+                            );
+                      if (success) {
+                        setState(() {
+                          items.removeAt(index);
+                          if (productId != null) {
+                            allItems.removeWhere((e) => e['id'] == productId);
+                          }
+                        });
+                      } else if (mounted) {
+                        await _loadItems(store);
+                      }
                     }
                   },
                 ),

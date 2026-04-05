@@ -22,6 +22,10 @@ class NumericInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textFormatter = FilteringTextInputFormatter.allow(
+      isAlphanumeric ? RegExp(r"[a-zA-Z0-9\u0600-\u06FF ]") : RegExp(r"[0-9]"),
+    );
+
     // set default value if provided
     if (defaultValue != null && controller.text.isEmpty) {
       controller.text = defaultValue!;
@@ -30,11 +34,7 @@ class NumericInputField extends StatelessWidget {
     Widget field = TextField(
       controller: controller,
       focusNode: focusNode, 
-      inputFormatters: [
-        isAlphanumeric
-            ? FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]'))
-            : FilteringTextInputFormatter.digitsOnly,
-      ],
+      inputFormatters: [textFormatter],
       decoration: InputDecoration(
         labelText: label,
         enabledBorder: OutlineInputBorder(

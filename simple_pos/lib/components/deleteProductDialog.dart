@@ -11,8 +11,11 @@ Future<void> showDeleteProductDialog(
   final TextEditingController codeController = TextEditingController();
   final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
 
+  void cleanup() {
+    codeController.dispose();
+  }
 
-  bool isLoaded = false; // to mimic "Next" loading style
+  bool isLoaded = false;
 
   await showDialog(
     context: context,
@@ -72,7 +75,7 @@ Future<void> showDeleteProductDialog(
                               return;
                             }
 
-                            final items = await DStockTable().getRecords();
+                            final items = await DStockTable().getProductsByStore(store);
                             final product = items.firstWhere(
                               (e) => e['productCodeBar'] == codeController.text,
                               orElse: () => {},

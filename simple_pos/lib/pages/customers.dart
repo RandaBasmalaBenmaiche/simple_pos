@@ -1,14 +1,17 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
+import 'package:flutter/foundation.dart';
 import 'package:simple_pos/components/addCustomerDialog.dart';
+import 'package:simple_pos/components/editCustomerDialog.dart';
 import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/components/customersTable.dart';
 import 'package:simple_pos/components/payDebtDialog.dart';
 import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
+import 'package:simple_pos/services/platform/file_text.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -80,6 +83,13 @@ class _POSPageCustomersState extends State<POSPageCustomers> {
 
     String csv = const ListToCsvConverter().convert(rows);
 
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('التصدير المباشر غير متاح حالياً على الويب')),
+      );
+      return;
+    }
+
     String? outputFile = await FilePicker.platform.saveFile(
       dialogTitle: 'اختر مكان حفظ الملف',
       fileName: 'customers_export.csv',
@@ -88,8 +98,7 @@ class _POSPageCustomersState extends State<POSPageCustomers> {
     );
 
     if (outputFile != null) {
-      final file = File(outputFile);
-      await file.writeAsString(csv);
+      await writeTextFile(outputFile, csv);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تم تصدير العملاء إلى $outputFile')),
@@ -102,11 +111,20 @@ Future<void> importCustomersFromCSV(int storeId) async {
   FilePickerResult? result = await FilePicker.platform.pickFiles(
     type: FileType.custom,
     allowedExtensions: ['csv'],
+    withData: true,
   );
 
-  if (result != null && result.files.single.path != null) {
-    final file = File(result.files.single.path!);
-    final csvString = await file.readAsString();
+  if (result != null) {
+    final picked = result.files.single;
+    String? csvString;
+
+    if (picked.bytes != null) {
+      csvString = utf8.decode(picked.bytes!);
+    } else if (picked.path != null) {
+      csvString = await readTextFile(picked.path!);
+    }
+
+    if (csvString == null) return;
 
     List<List<dynamic>> rows =
         const CsvToListConverter().convert(csvString, eol: '\n');
@@ -189,7 +207,7 @@ Future<void> importCustomersFromCSV(int storeId) async {
                           debt: double.parse(debt),
                         );
                         await _loadCustomers(store);
-                      });
+                      }, showIdAfterCreate: true);
                     },
                   ),
                   const SizedBox(width: 10),
@@ -220,16 +238,14 @@ Future<void> importCustomersFromCSV(int storeId) async {
                   customers: customers,
                   onEdit: (int index) async{
                     final customer = customers[index];
-                    await showPayDebtDialog(context, customer, "اضافة دين للعميل" ,(amount) async {
-                      final newDebt = (customer['debt'] ?? 0) + amount;
+                    await showEditCustomerDialog(context, customer, (name, phone) async {
                       await DCustomersTable().updateCustomer(
                         id: customer['id'],
-                        debt: newDebt,
+                        name: name,
+                        phone: phone,
                       );
                       await _loadCustomers(store);
                     });
-
-
                   },
                   onPayDebt: (index) async {
                     final customer = customers[index];

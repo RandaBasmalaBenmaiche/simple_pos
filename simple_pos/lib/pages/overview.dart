@@ -32,7 +32,15 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     searchController.addListener(_onSearchChanged);
   }
 
+  @override
+  void dispose() {
+    searchController.removeListener(_onSearchChanged);
+    searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData(int store) async {
+    if (!mounted) return;
     final rawProducts = await DStockTable().getProductsByStore(store);
 
     final loadedProducts = rawProducts.map((item) {
@@ -72,6 +80,7 @@ class _POSPageOverviewState extends State<POSPageOverview> {
       debts += double.tryParse(cust['debt']?.toString() ?? '0') ?? 0;
     }
 
+    if (!mounted) return;
     setState(() {
       products = loadedProducts;
       totalProfit = profit;
@@ -99,9 +108,9 @@ class _POSPageOverviewState extends State<POSPageOverview> {
   }
 
   Future<void> _editProductPrice(Map<String, dynamic> product) async {
-    TextEditingController buyingController =
+    final buyingController =
         TextEditingController(text: (product['productBuyingPrice'] ?? 0).toString());
-    TextEditingController sellingController =
+    final sellingController =
         TextEditingController(text: (product['productPrice'] ?? 0).toString());
 
     final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
@@ -142,19 +151,31 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                       double newSelling =
                           double.tryParse(sellingController.text) ?? 0;
 
-                      await DStockTable().updateProductPrices(
-                        codeBar: product['productCodeBar'] ?? '',
-                        storeId: store,
-                        newBuyingPrice: newBuying,
-                        newSellingPrice: newSelling,
-                      );
+                      final stockTable = DStockTable();
+                      bool success = false;
+                      final productId = product['id'] as int?;
 
-                      setState(() {
-                        product['productBuyingPrice'] = newBuying;
-                        product['productPrice'] = newSelling;
-                      });
+                      if (productId != null) {
+                        success = await stockTable.updateProductById(
+                          id: productId,
+                          newBuyingPrice: newBuying.toString(),
+                          newPrice: newSelling.toString(),
+                        );
+                      }
 
-                      Navigator.pop(context);
+                      if (!success) {
+                        success = await stockTable.updateProductPrices(
+                          codeBar: product['productCodeBar'] ?? '',
+                          storeId: store,
+                          newBuyingPrice: newBuying,
+                          newSellingPrice: newSelling,
+                        );
+                      }
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        _loadData(store);
+                      }
                     },
                   ),
                 ],
@@ -172,25 +193,43 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                   double newSelling =
                       double.tryParse(sellingController.text) ?? 0;
 
-                  await DStockTable().updateProductPrices(
-                    codeBar: product['productCodeBar'] ?? '',
-                    storeId: store,
-                    newBuyingPrice: newBuying,
-                    newSellingPrice: newSelling,
-                  );
+                  final stockTable = DStockTable();
+                  bool success = false;
+                  final productId = product['id'] as int?;
 
-                  setState(() {
-                    product['productBuyingPrice'] = newBuying;
-                    product['productPrice'] = newSelling;
-                  });
+                  if (productId != null) {
+                    success = await stockTable.updateProductById(
+                      id: productId,
+                      newBuyingPrice: newBuying.toString(),
+                      newPrice: newSelling.toString(),
+                    );
+                  }
 
-                  Navigator.pop(context);
+                  if (!success) {
+                    success = await stockTable.updateProductPrices(
+                      codeBar: product['productCodeBar'] ?? '',
+                      storeId: store,
+                      newBuyingPrice: newBuying,
+                      newSellingPrice: newSelling,
+                    );
+                  }
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    _loadData(store);
+                  }
                 },
                 child: const Text("حفظ")),
           ],
         );
       },
     );
+
+    // Cleanup
+    buyingController.dispose();
+    sellingController.dispose();
+    buyingFocusNode.dispose();
+    sellingFocusNode.dispose();
   }
 
   Future<void> _pickStartDate() async {

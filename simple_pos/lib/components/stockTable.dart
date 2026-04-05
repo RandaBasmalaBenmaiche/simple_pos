@@ -21,17 +21,28 @@ class POSStockItemsTable extends StatefulWidget {
 }
 
 class _POSStockItemsTableState extends State<POSStockItemsTable> {
-  // Track which rows have visibility unlocked
+  final Map<int, TextEditingController> _controllers = {};
 
   @override
   void didUpdateWidget(covariant POSStockItemsTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // If items length changes, resize the visibility list safely
-
+    // Build a set of current item IDs
+    final currentIds = widget.items.map((item) => item['id'] as int).toSet();
+    // Clean up controllers for removed items
+    final keysToRemove = _controllers.keys.where((id) => !currentIds.contains(id)).toList();
+    for (final key in keysToRemove) {
+      _controllers[key]?.dispose();
+      _controllers.remove(key);
+    }
   }
 
-
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,17 +69,16 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
         ],
         rows: List.generate(widget.items.length, (index) {
           final item = widget.items[index];
+          final itemId = item['id'] as int;
 
           // Handle optional fields with safe defaults
           final price = item['productPrice']?.toString();
-          final quantity = item['productQuantity']?.toString();
+          final quantity = item['productQuantity']?.toString() ?? '0';
           final name = item['productName']?.toString();
           final codeBar = item['productCodeBar']?.toString();
 
           return DataRow(
             cells: [
-
-
               // Selling Price (null-safe with default 0.00)
               DataCell(
                 Text(
@@ -77,17 +87,14 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                 ),
               ),
 
-              // Quantity (null-safe with default 0)
+              // Quantity (null-safe with default 0) - use item ID as key
               DataCell(
                 SizedBox(
                   width: 60,
                   child: TextField(
-                    controller: TextEditingController.fromValue(
-                      TextEditingValue(
-                        text: quantity ?? '0',
-                        selection: TextSelection.collapsed(offset: (quantity ?? '0').length),
-                      ),
-                    ),
+                    controller: _controllers.putIfAbsent(itemId, () => TextEditingController(
+                      text: quantity,
+                    )),
                     keyboardType: TextInputType.number,
                     onChanged: (value) {
                       widget.onQuantityChanged(index, value);

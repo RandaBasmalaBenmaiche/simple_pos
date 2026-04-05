@@ -41,10 +41,13 @@ class _POSCustomersTableState extends State<POSCustomersTable> {
           DataColumn2(label: Text("الديْن"), size: ColumnSize.M),
           DataColumn2(label: Text("الهاتف"), size: ColumnSize.L),
           DataColumn2(label: Text("الإسم"), size: ColumnSize.L),
+          DataColumn2(label: Text("ID"), size: ColumnSize.S),
           DataColumn2(label: Text(""), size: ColumnSize.S), // actions
         ],
         rows: List.generate(widget.customers.length, (index) {
           final customer = widget.customers[index];
+          final customerId = customer['id'] as int;
+          final formattedId = customerId.toString().padLeft(3, '0');
 
           return DataRow(
             cells: [
@@ -62,7 +65,10 @@ class _POSCustomersTableState extends State<POSCustomersTable> {
                 customer['name'],
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               )),
-
+              DataCell(Text(
+                formattedId,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              )),
               DataCell(
                 Row(
                   children: [

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 Future<void> showAddProductDialog(
   BuildContext context,
@@ -18,7 +20,7 @@ Future<void> showAddProductDialog(
   final TextEditingController buyingPriceController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
   final TextEditingController codeController = TextEditingController();
-
+  final storeId = context.read<StoreCubit>().state;
   // Focus nodes for moving between fields
   final FocusNode nameFocus = FocusNode();
   final FocusNode priceFocus = FocusNode();
@@ -39,7 +41,7 @@ Future<void> showAddProductDialog(
 
     // Check if code exists only if code is provided
     if (codeController.text.isNotEmpty) {
-      final items = await DStockTable().getRecords();
+      final items = await DStockTable().getProductsByStore(storeId);
       final existingProduct = items.firstWhere(
         (e) => e['productCodeBar'] == codeController.text,
         orElse: () => {},

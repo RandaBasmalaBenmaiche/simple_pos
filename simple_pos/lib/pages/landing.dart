@@ -12,15 +12,19 @@ import 'package:simple_pos/components/priceDialog.dart';
 class Landing extends StatelessWidget {
   const Landing({super.key});
 
+  // Admin password for accessing private space (POSPageOverview)
+  // Change this to your desired password
+  static const _adminPassword = "18071970";
+
   Future<void> _showPasswordDialog(BuildContext context) async {
     final TextEditingController passwordController = TextEditingController();
     final FocusNode passwordFocusNode = FocusNode();
-    const String correctPassword = "18071970";
 
-    void checkPassword() {
-      if (passwordController.text == correctPassword) {
-        Navigator.pop(context); // Close dialog
-        Navigator.push(
+    Future<void> checkPassword(BuildContext dialogContext) async {
+      if (passwordController.text == _adminPassword) {
+        Navigator.of(dialogContext).pop();
+        if (!context.mounted) return;
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const POSPageOverview()),
         );
@@ -33,9 +37,13 @@ class Landing extends StatelessWidget {
 
     await showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         // ✅ Request focus after dialog is built
-        Future.microtask(() => passwordFocusNode.requestFocus());
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (passwordFocusNode.context != null) {
+            passwordFocusNode.requestFocus();
+          }
+        });
 
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -48,19 +56,20 @@ class Landing extends StatelessWidget {
             focusNode: passwordFocusNode,
             obscureText: true,
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
               hintText: "كلمة المرور",
               border: OutlineInputBorder(),
             ),
-            onSubmitted: (_) => checkPassword(), // ✅ Press Enter = "دخول"
+            onSubmitted: (_) => checkPassword(dialogContext),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text("إلغاء"),
             ),
             ElevatedButton(
-              onPressed: checkPassword,
+              onPressed: () => checkPassword(dialogContext),
               child: const Text("دخول"),
             ),
           ],
@@ -68,8 +77,9 @@ class Landing extends StatelessWidget {
       },
     );
 
-    // ✅ Clear password after dialog closes
-    passwordController.clear();
+    // ✅ Dispose after dialog closes
+    passwordController.dispose();
+    passwordFocusNode.dispose();
   }
 
   @override

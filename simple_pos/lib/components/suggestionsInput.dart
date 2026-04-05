@@ -26,6 +26,10 @@ class SuggestionInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textFormatter = FilteringTextInputFormatter.allow(
+      isAlphanumeric ? RegExp(r"[a-zA-Z0-9\u0600-\u06FF ]") : RegExp(r"[0-9]"),
+    );
+
     // Set default value if provided
     if (defaultValue != null && controller.text.isEmpty) {
       controller.text = defaultValue!;
@@ -55,11 +59,7 @@ class SuggestionInputField extends StatelessWidget {
         return TextField(
           controller: textController, // crucial for Autocomplete to work
           focusNode: focusNode ?? fNode,
-          inputFormatters: [
-            isAlphanumeric
-                ? FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]'))
-                : FilteringTextInputFormatter.digitsOnly,
-          ],
+          inputFormatters: [textFormatter],
           decoration: InputDecoration(
             labelText: label,
             enabledBorder: OutlineInputBorder(

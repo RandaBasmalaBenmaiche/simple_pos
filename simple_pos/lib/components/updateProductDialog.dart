@@ -17,11 +17,12 @@ Future<void> showEditProductDialog(
   final TextEditingController quantityController = TextEditingController();
 
   final int storeId = BlocProvider.of<StoreCubit>(context, listen: false).state;
-
-  final List<String> productNames = await DStockTable().getAllProductNames(storeId);
+  final stockTable = DStockTable();
+  final List<String> productNames = await stockTable.getAllProductNames(storeId);
 
   bool isLoaded = false;
   bool isEditable = true;
+  int? loadedProductId;
 
   final FocusNode newCodeFocus = FocusNode();
   final FocusNode nameFocus = FocusNode();
@@ -29,32 +30,43 @@ Future<void> showEditProductDialog(
   final FocusNode buyingPriceFocus = FocusNode();
   final FocusNode quantityFocus = FocusNode();
 
+  void cleanup() {
+    codeController.dispose();
+    oldNameController.dispose();
+    newCodeController.dispose();
+    nameController.dispose();
+    priceController.dispose();
+    buyingPriceController.dispose();
+    quantityController.dispose();
+    newCodeFocus.dispose();
+    nameFocus.dispose();
+    priceFocus.dispose();
+    buyingPriceFocus.dispose();
+    quantityFocus.dispose();
+  }
+
   await showDialog(
     context: context,
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) {
           Future<void> loadProduct() async {
-            final items = await DStockTable().getRecords();
-            Map<String, dynamic> product = {};
+            Map<String, dynamic>? product;
 
             if (codeController.text.isNotEmpty) {
-              product = items.firstWhere(
-                  (e) => e['productCodeBar'] == codeController.text,
-                  orElse: () => {});
+              product = await stockTable.getProductByCode(codeController.text, storeId);
             } else if (oldNameController.text.isNotEmpty) {
-              product = items.firstWhere(
-                  (e) => e['productName'] == oldNameController.text,
-                  orElse: () => {});
+              product = await stockTable.getProductByName(oldNameController.text, storeId);
             }
 
-            if (product.isNotEmpty) {
+            if (product != null && product.isNotEmpty) {
               setState(() {
-                newCodeController.text = product['productCodeBar'] ?? '';
-                nameController.text = product['productName'] ?? '';
-                priceController.text = product['productPrice'] ?? '';
-                buyingPriceController.text = product['productBuyingPrice'] ?? '';
-                quantityController.text = product['productQuantity'] ?? '';
+                loadedProductId = product?['id'] as int?;
+                newCodeController.text = product?['productCodeBar'] ?? '';
+                nameController.text = product?['productName'] ?? '';
+                priceController.text = product?['productPrice'] ?? '';
+                buyingPriceController.text = product?['productBuyingPrice'] ?? '';
+                quantityController.text = product?['productQuantity'] ?? '';
                 isLoaded = true;
                 isEditable = false;
               });
@@ -78,7 +90,7 @@ Future<void> showEditProductDialog(
             bool success = false;
 
             if (codeController.text.isNotEmpty) {
-              success = await DStockTable().updateProduct(
+              success = await stockTable.updateProduct(
                 codeBar: codeController.text,
                 newCodeBar: newCodeController.text,
                 newName: nameController.text,
@@ -88,7 +100,7 @@ Future<void> showEditProductDialog(
                 storeId: storeId,
               );
             } else if (oldNameController.text.isNotEmpty) {
-              success = await DStockTable().updateProductByName(
+              success = await stockTable.updateProductByName(
                 name: oldNameController.text,
                 newCodeBar: newCodeController.text,
                 newName: nameController.text,
@@ -99,11 +111,23 @@ Future<void> showEditProductDialog(
               );
             }
 
+            if (!success && loadedProductId != null) {
+              success = await stockTable.updateProductById(
+                id: loadedProductId!,
+                newCodeBar: newCodeController.text,
+                newName: nameController.text,
+                newPrice: priceController.text,
+                newBuyingPrice: buyingPriceController.text,
+                newQuantity: quantityController.text,
+              );
+            }
+
             if (success) {
               ScaffoldMessenger.of(context)
                   .showSnackBar(const SnackBar(content: Text("تم التحديث بنجاح")));
               onUpdate();
               Navigator.pop(context);
+              cleanup();
             } else {
               ScaffoldMessenger.of(context)
                   .showSnackBar(const SnackBar(content: Text("حدث خطأ أثناء التحديث")));

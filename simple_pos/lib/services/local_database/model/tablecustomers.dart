@@ -1,25 +1,10 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:simple_pos/services/local_database/dbFactory.dart';
-import 'package:simple_pos/services/local_database/dbTable.dart';
+import 'package:sembast/sembast.dart';
 
-class DCustomersTable extends DBBaseTable {
-  @override
-  var db_table = 'customers';
+import '../dbFactory.dart';
 
-  // ==========================
-  // SQL: Create Customers Table
-  // ==========================
-  static String sql_code = '''
-    CREATE TABLE customers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      store_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      phone TEXT,
-      debt REAL NOT NULL DEFAULT 0
-    );
-  ''';
+class DCustomersTable {
+  DCustomersTable();
 
-  /// Insert new customer
   Future<int?> insertCustomer({
     required int storeId,
     required String name,
@@ -27,53 +12,71 @@ class DCustomersTable extends DBBaseTable {
     double debt = 0,
   }) async {
     try {
-      final database = await DBfactory.getDatabase();
-      return await database.insert(db_table, {
-        'store_id': storeId,
-        'name': name,
-        'phone': phone,
-        'debt': debt,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      final db = await DBfactory.getDatabase();
+      return db.transaction((txn) async {
+        final id = await DBfactory.allocateId(txn, 'customers');
+        await DBfactory.customersStore.record(id).put(txn, {
+          'id': id,
+          'store_id': storeId,
+          'name': name,
+          'phone': phone,
+          'debt': debt,
+        });
+        return id;
+      });
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return null;
     }
   }
 
-  /// Get all customers for a store
   Future<List<Map<String, dynamic>>> getCustomers(int storeId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      return await database.query(
-        db_table,
-        where: 'store_id = ?',
-        whereArgs: [storeId],
-        orderBy: 'id DESC',
-      );
+      final db = await DBfactory.getDatabase();
+      final snapshots = await DBfactory.customersStore.find(db);
+      final customers = snapshots
+          .map((snapshot) => _normalize(snapshot.key, snapshot.value))
+          .where((customer) => customer['store_id'] == storeId)
+          .toList()
+        ..sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
+      return customers;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return [];
     }
   }
 
-  /// Get customer by ID
   Future<Map<String, dynamic>?> getCustomerById(int id) async {
     try {
-      final database = await DBfactory.getDatabase();
-      final res = await database.query(
-        db_table,
-        where: 'id = ?',
-        whereArgs: [id],
-        limit: 1,
-      );
-      return res.isNotEmpty ? res.first : null;
+      final db = await DBfactory.getDatabase();
+      final record = await DBfactory.customersStore.record(id).get(db);
+      if (record == null) return null;
+      return _normalize(id, record);
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return null;
     }
   }
 
-  /// Update customer's info or debt
+  Future<int> getNextCustomerId() async {
+    try {
+      final db = await DBfactory.getDatabase();
+      final snapshots = await DBfactory.customersStore.find(db);
+      if (snapshots.isEmpty) return 1;
+      final maxId = snapshots
+          .map((snapshot) => snapshot.key)
+          .fold<int>(0, (prev, id) => id > prev ? id : prev);
+      return maxId + 1;
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+      return 1;
+    }
+  }
+
+  static String formatCustomerId(int id) {
+    return id.toString().padLeft(3, '0');
+  }
+
   Future<bool> updateCustomer({
     required int id,
     String? name,
@@ -81,58 +84,61 @@ class DCustomersTable extends DBBaseTable {
     double? debt,
   }) async {
     try {
-      final database = await DBfactory.getDatabase();
-      final data = <String, Object?>{};
-      if (name != null) data['name'] = name;
-      if (phone != null) data['phone'] = phone;
-      if (debt != null) data['debt'] = debt;
+      final db = await DBfactory.getDatabase();
+      final existing = await DBfactory.customersStore.record(id).get(db);
+      if (existing == null) return false;
 
-      if (data.isEmpty) return true;
+      final updated = Map<String, Object?>.from(existing);
+      if (name != null) updated['name'] = name;
+      if (phone != null) updated['phone'] = phone;
+      if (debt != null) updated['debt'] = debt;
 
-      final count = await database.update(
-        db_table,
-        data,
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      return count > 0;
+      await DBfactory.customersStore.record(id).put(db, updated);
+      return true;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
     }
   }
 
-/// Get customer(s) by Name
-Future<List<Map<String, dynamic>>> getCustomerByName(String name, int storeId) async {
-  try {
-    final database = await DBfactory.getDatabase();
-    final res = await database.query(
-      db_table,
-      where: 'store_id = ? AND name LIKE ?',
-      whereArgs: [storeId, '%$name%'], // supports partial match
-      orderBy: 'id DESC',
-    );
-    return res;
-  } catch (e, stacktrace) {
-    print('$e --> $stacktrace');
-    return [];
+  Future<List<Map<String, dynamic>>> getCustomerByName(
+    String name,
+    int storeId,
+  ) async {
+    try {
+      final normalizedQuery = name.trim().toLowerCase();
+      final customers = await getCustomers(storeId);
+      return customers
+          .where((customer) => customer['name']
+              .toString()
+              .toLowerCase()
+              .contains(normalizedQuery))
+          .toList()
+        ..sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+      return [];
+    }
   }
-}
 
-
-  /// Delete customer
   Future<bool> deleteCustomer(int id) async {
     try {
-      final database = await DBfactory.getDatabase();
-      final count = await database.delete(
-        db_table,
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      return count > 0;
+      final db = await DBfactory.getDatabase();
+      await DBfactory.customersStore.record(id).delete(db);
+      return true;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
     }
+  }
+
+  Map<String, dynamic> _normalize(int id, Map<String, Object?> raw) {
+    return {
+      'id': id,
+      'store_id': raw['store_id'] as int? ?? 0,
+      'name': raw['name']?.toString() ?? '',
+      'phone': raw['phone']?.toString(),
+      'debt': (raw['debt'] as num?)?.toDouble() ?? 0,
+    };
   }
 }

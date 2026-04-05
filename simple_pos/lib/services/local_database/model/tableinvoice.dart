@@ -1,29 +1,11 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:simple_pos/services/local_database/dbFactory.dart';
-import 'package:simple_pos/services/local_database/dbTable.dart';
+import 'package:sembast/sembast.dart';
 
-// ==========================
-// Invoice Table (summary)
-// ==========================
-class DInvoiceTable extends DBBaseTable {
-  @override
-  var db_table = 'invoices';
+import '../dbFactory.dart';
+import 'tablecustomers.dart';
 
-  // Updated table SQL
-  static String sql_code = '''
-    CREATE TABLE invoices (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      store_id INTEGER NOT NULL,
-      customer_id INTEGER,
-      customer_name TEXT,
-      total_debt_customer TEXT DEFAULT '0',
-      date TEXT NOT NULL,
-      total TEXT NOT NULL,
-      profit TEXT NOT NULL DEFAULT '0'
-    );
-  ''';
+class DInvoiceTable {
+  DInvoiceTable();
 
-  /// Insert a new invoice with items for a specific store
   Future<int?> insertInvoice({
     required int storeId,
     required String date,
@@ -34,29 +16,21 @@ class DInvoiceTable extends DBBaseTable {
     required List<Map<String, dynamic>> items,
   }) async {
     try {
-      final database = await DBfactory.getDatabase();
-
-      // Insert invoice with store_id, customer details, and total debt
-      int invoiceId = await database.insert(db_table, {
+      final invoiceId = await custinsertRecord({
         'store_id': storeId,
-        'customer_id': customerId,
-        'customer_name': customerName,
-        'total_debt_customer': totalDebtCustomer ?? '0',
         'date': date,
         'total': total,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+        'customer_name': customerName,
+        'customer_id': customerId,
+        'total_debt_customer': totalDebtCustomer,
+      });
 
-      // Insert items for this invoice
-      final itemTable = DInvoiceItemsTable();
-      for (var item in items) {
-        await itemTable.insertRecord({
+      if (invoiceId == null) return null;
+
+      for (final item in items) {
+        await DInvoiceItemsTable().insertItem({
           'invoice_id': invoiceId,
-          'productCodeBar': item['productCodeBar'],
-          'productName': item['productName'],
-          'quantity': item['quantity'],
-          'price': item['price'],
-          'profit': item['profit'],
-          'totalPrice': item['totalPrice'],
+          ...item,
         });
       }
 
@@ -67,53 +41,59 @@ class DInvoiceTable extends DBBaseTable {
     }
   }
 
-  /// Get all invoices for a specific store
   Future<List<Map<String, dynamic>>> getInvoices(int storeId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      return await database.query(
-        db_table,
-        where: 'store_id = ?',
-        whereArgs: [storeId],
-        orderBy: 'id DESC',
-      );
+      final db = await DBfactory.getDatabase();
+      final snapshots = await DBfactory.invoicesStore.find(db);
+      final invoices = snapshots
+          .map((snapshot) => _normalize(snapshot.key, snapshot.value))
+          .where((invoice) => invoice['store_id'] == storeId)
+          .toList()
+        ..sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
+      return invoices;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return [];
     }
   }
 
-  /// Get a specific invoice by ID
   Future<Map<String, dynamic>?> getInvoiceById(int id) async {
     try {
-      final database = await DBfactory.getDatabase();
-      List<Map<String, dynamic>> results =
-          await database.query(db_table, where: 'id = ?', whereArgs: [id]);
-      return results.isNotEmpty ? results.first : null;
+      final db = await DBfactory.getDatabase();
+      final record = await DBfactory.invoicesStore.record(id).get(db);
+      if (record == null) return null;
+      return _normalize(id, record);
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return null;
     }
   }
 
-  /// Insert custom record (with storeId)
   Future<int?> custinsertRecord(Map<String, dynamic> data) async {
     try {
-      final database = await DBfactory.getDatabase();
-      int id = await database.insert(
-        db_table,
-        data,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-      print("inserted:\t$data");
-      return id;
+      final db = await DBfactory.getDatabase();
+      return db.transaction((txn) async {
+        final id = await DBfactory.allocateId(txn, 'invoices');
+        await DBfactory.invoicesStore.record(id).put(txn, {
+          'id': id,
+          'store_id': data['store_id'] as int? ?? 0,
+          'date': data['date']?.toString() ?? '',
+          'total': data['total']?.toString() ?? '',
+          'customer_name': data['customer_name']?.toString(),
+          'customer_id': data['customer_id'] as int?,
+          'total_debt_customer':
+              data['total_debt_customer']?.toString() ?? '0',
+          'profit': data['profit']?.toString() ?? '0',
+        });
+        print('inserted:\t$data');
+        return id;
+      });
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
+      return null;
     }
-    return null;
   }
 
-  /// Update invoice with new profit (or other fields)
   Future<bool> updateInvoice({
     required int id,
     String? total,
@@ -123,102 +103,141 @@ class DInvoiceTable extends DBBaseTable {
     String? totalDebtCustomer,
   }) async {
     try {
-      final database = await DBfactory.getDatabase();
-      Map<String, dynamic> updatedFields = {};
-      if (total != null) updatedFields['total'] = total;
-      if (profit != null) updatedFields['profit'] = profit.toString();
-      if (customerName != null) updatedFields['customer_name'] = customerName;
-      if (customerId != null) updatedFields['customer_id'] = customerId;
-      if (totalDebtCustomer != null) updatedFields['total_debt_customer'] = totalDebtCustomer;
+      final db = await DBfactory.getDatabase();
+      final existing = await DBfactory.invoicesStore.record(id).get(db);
+      if (existing == null) return false;
 
-      if (updatedFields.isEmpty) return false;
+      final updated = Map<String, Object?>.from(existing);
+      if (total != null) updated['total'] = total;
+      if (profit != null) updated['profit'] = profit.toString();
+      if (customerName != null) updated['customer_name'] = customerName;
+      if (customerId != null) updated['customer_id'] = customerId;
+      if (totalDebtCustomer != null) {
+        updated['total_debt_customer'] = totalDebtCustomer;
+      }
 
-      int count = await database.update(
-        db_table,
-        updatedFields,
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      return count > 0;
+      await DBfactory.invoicesStore.record(id).put(db, updated);
+      return true;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
     }
   }
 
-  /// Reset debt of the invoice by fetching the latest debt of the customer
   Future<bool> resetDebt({required int invoiceId}) async {
     try {
-      final database = await DBfactory.getDatabase();
-      // Get invoice
       final invoice = await getInvoiceById(invoiceId);
       if (invoice == null || invoice['customer_id'] == null) return false;
 
-      final customerId = invoice['customer_id'];
+      final customerId = invoice['customer_id'] as int;
+      final customer = await DCustomersTable().getCustomerById(customerId);
+      if (customer == null) return false;
 
-      // Get customer debt from customers table
-      final customerResult = await database.query(
-        'customers',
-        columns: ['debt'],
-        where: 'id = ?',
-        whereArgs: [customerId],
+      return updateInvoice(
+        id: invoiceId,
+        totalDebtCustomer: customer['debt'].toString(),
       );
-
-      if (customerResult.isEmpty) return false;
-      final debt = customerResult.first['debt']?.toString() ?? '0';
-
-      // Update invoice
-      return await updateInvoice(id: invoiceId, totalDebtCustomer: debt);
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
     }
   }
+
+  Map<String, dynamic> _normalize(int id, Map<String, Object?> raw) {
+    return {
+      'id': id,
+      'store_id': raw['store_id'] as int? ?? 0,
+      'customer_id': raw['customer_id'] as int?,
+      'customer_name': raw['customer_name']?.toString(),
+      'total_debt_customer': raw['total_debt_customer']?.toString() ?? '0',
+      'date': raw['date']?.toString() ?? '',
+      'total': raw['total']?.toString() ?? '',
+      'profit': raw['profit']?.toString() ?? '0',
+    };
+  }
 }
 
-// ==========================
-// Invoice Items Table
-// ==========================
-class DInvoiceItemsTable extends DBBaseTable {
-  @override
-  var db_table = 'invoice_items';
+class DInvoiceItemsTable {
+  DInvoiceItemsTable();
 
-  static String sql_code = '''
-  CREATE TABLE invoice_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_id INTEGER NOT NULL,
-    productCodeBar TEXT NOT NULL,
-    productName TEXT NOT NULL,
-    quantity TEXT NOT NULL,
-    price TEXT NOT NULL,
-    totalPrice TEXT NOT NULL,
-    profit TEXT NOT NULL,
-    FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
-  );
-  ''';
-
-  /// Get all items for a specific invoice
   Future<List<Map<String, dynamic>>> getItemsByInvoiceId(int invoiceId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      return await database.query(db_table,
-          where: 'invoice_id = ?', whereArgs: [invoiceId]);
+      final db = await DBfactory.getDatabase();
+      final snapshots = await DBfactory.invoiceItemsStore.find(db);
+      return snapshots
+          .map((snapshot) => _normalize(snapshot.key, snapshot.value))
+          .where((item) => item['invoice_id'] == invoiceId)
+          .toList()
+        ..sort((a, b) => (a['id'] as int).compareTo(b['id'] as int));
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return [];
     }
   }
 
-  /// Delete all items for a specific invoice
   Future<bool> deleteItemsByInvoiceId(int invoiceId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      int count = await database
-          .delete(db_table, where: 'invoice_id = ?', whereArgs: [invoiceId]);
-      return count > 0;
+      final db = await DBfactory.getDatabase();
+      final items = await getItemsByInvoiceId(invoiceId);
+      for (final item in items) {
+        await DBfactory.invoiceItemsStore.record(item['id'] as int).delete(db);
+      }
+      return true;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
     }
+  }
+
+  Future<int?> insertItem(Map<String, dynamic> item) async {
+    try {
+      final db = await DBfactory.getDatabase();
+      return db.transaction((txn) async {
+        final id = await DBfactory.allocateId(txn, 'invoice_items');
+        await DBfactory.invoiceItemsStore.record(id).put(txn, {
+          'id': id,
+          'invoice_id': item['invoice_id'] as int? ?? 0,
+          'productCodeBar': item['productCodeBar']?.toString() ?? '',
+          'productName': item['productName']?.toString() ?? '',
+          'quantity': item['quantity']?.toString() ?? '',
+          'price': item['price']?.toString() ?? '',
+          'profit': item['profit']?.toString() ?? '',
+          'totalPrice': item['totalPrice']?.toString() ?? '',
+        });
+        return id;
+      });
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+      return null;
+    }
+  }
+
+  Future<List<int>> insertItems(List<Map<String, dynamic>> items) async {
+    final ids = <int>[];
+    try {
+      for (final item in items) {
+        final id = await insertItem(item);
+        if (id != null) {
+          ids.add(id);
+        }
+      }
+      return ids;
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+      return [];
+    }
+  }
+
+  Map<String, dynamic> _normalize(int id, Map<String, Object?> raw) {
+    return {
+      'id': id,
+      'invoice_id': raw['invoice_id'] as int? ?? 0,
+      'productCodeBar': raw['productCodeBar']?.toString() ?? '',
+      'productName': raw['productName']?.toString() ?? '',
+      'quantity': raw['quantity']?.toString() ?? '',
+      'price': raw['price']?.toString() ?? '',
+      'totalPrice': raw['totalPrice']?.toString() ?? '',
+      'profit': raw['profit']?.toString() ?? '',
+    };
   }
 }

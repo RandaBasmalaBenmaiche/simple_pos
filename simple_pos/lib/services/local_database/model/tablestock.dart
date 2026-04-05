@@ -1,90 +1,84 @@
-import 'dart:io';
-import 'package:simple_pos/services/local_database/dbFactory.dart';
-import 'package:simple_pos/services/local_database/dbTable.dart';
 import 'package:csv/csv.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sembast/sembast.dart';
 
-class DStockTable extends DBBaseTable {
-  @override
-  var db_table = 'products_stock';
+import '../dbFactory.dart';
 
-  static String sql_code = '''
-  CREATE TABLE products_stock (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    store_id INTEGER,
-    productName TEXT NOT NULL,  
-    productPrice TEXT,
-    productBuyingPrice TEXT,
-    productCodeBar TEXT,
-    productQuantity TEXT,
-    UNIQUE(store_id, productCodeBar),
-    UNIQUE(store_id, productName)
-  );
-  ''';
+class DStockTable {
+  DStockTable({Object? isar});
 
-  /// Insert new product
   Future<int?> insertProduct({
     int? storeId,
-    required String name, // required
+    required String name,
     String? price,
     String? buyingPrice,
     String? codeBar,
     String? quantity,
   }) async {
-    print("Insert product called");
     try {
-      final database = await DBfactory.getDatabase();
-      return await database.insert(
-        db_table,
-        {
-          'store_id': storeId,
+      final db = await DBfactory.getDatabase();
+      return db.transaction((txn) async {
+        final id = await DBfactory.allocateId(txn, 'stock');
+        await DBfactory.stockStore.record(id).put(txn, {
+          'id': id,
+          'store_id': storeId ?? 0,
           'productName': name,
           'productPrice': price,
           'productBuyingPrice': buyingPrice,
           'productCodeBar': codeBar,
           'productQuantity': quantity,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+        });
+        return id;
+      });
     } catch (e, stacktrace) {
       print('Insert error: $e --> $stacktrace');
       return null;
     }
   }
 
-  /// Get product by code for specific store
+  Future<Map<String, dynamic>?> getProductById(int id) async {
+    try {
+      final db = await DBfactory.getDatabase();
+      final record = await DBfactory.stockStore.record(id).get(db);
+      if (record == null) return null;
+      return _normalize(id, record);
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> getProductByCode(String codeBar, int? storeId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      List<Map<String, dynamic>> results = await database.query(
-        db_table,
-        where: 'productCodeBar = ? AND store_id IS ?',
-        whereArgs: [codeBar, storeId],
-      );
-      return results.isNotEmpty ? results.first : null;
+      final products = await getProductsByStore(storeId);
+      for (final product in products) {
+        if ((product['productCodeBar'] ?? '') == codeBar) {
+          return product;
+        }
+      }
+      return null;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return null;
     }
   }
 
-  /// Get product by name for specific store
   Future<Map<String, dynamic>?> getProductByName(String name, int? storeId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      List<Map<String, dynamic>> results = await database.query(
-        db_table,
-        where: 'productName = ? AND store_id IS ?',
-        whereArgs: [name, storeId],
-      );
-      return results.isNotEmpty ? results.first : null;
+      final normalizedName = name.trim().toLowerCase();
+      final products = await getProductsByStore(storeId);
+      for (final product in products) {
+        if (product['productName'].toString().trim().toLowerCase() ==
+            normalizedName) {
+          return product;
+        }
+      }
+      return null;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return null;
     }
   }
 
-  /// Update product by code for specific store
   Future<bool> updateProduct({
     required String codeBar,
     int? storeId,
@@ -95,190 +89,217 @@ class DStockTable extends DBBaseTable {
     String? newQuantity,
   }) async {
     try {
-      final database = await DBfactory.getDatabase();
-      Map<String, dynamic> updatedFields = {};
-      if (newCodeBar != null) updatedFields['productCodeBar'] = newCodeBar;
-      if (newName != null) updatedFields['productName'] = newName;
-      if (newPrice != null) updatedFields['productPrice'] = newPrice;
-      if (newBuyingPrice != null) updatedFields['productBuyingPrice'] = newBuyingPrice;
-      if (newQuantity != null) updatedFields['productQuantity'] = newQuantity;
-      if (updatedFields.isEmpty) return false;
-
-      int count = await database.update(
-        db_table,
-        updatedFields,
-        where: 'productCodeBar = ? AND store_id IS ?',
-        whereArgs: [codeBar, storeId],
+      final product = await getProductByCode(codeBar, storeId);
+      if (product == null) return false;
+      return updateProductById(
+        id: product['id'] as int,
+        newCodeBar: newCodeBar,
+        newName: newName,
+        newPrice: newPrice,
+        newBuyingPrice: newBuyingPrice,
+        newQuantity: newQuantity,
       );
-      return count > 0;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
     }
   }
 
-/// Update product by name for specific store
-Future<bool> updateProductByName({
-  required String name,
-  int? storeId,
-  String? newCodeBar,
-  String? newName,
-  String? newPrice,
-  String? newBuyingPrice,
-  String? newQuantity,
-}) async {
-  try {
-    final database = await DBfactory.getDatabase();
-    Map<String, dynamic> updatedFields = {};
-    if (newCodeBar != null) updatedFields['productCodeBar'] = newCodeBar;
-    if (newName != null) updatedFields['productName'] = newName;
-    if (newPrice != null) updatedFields['productPrice'] = newPrice;
-    if (newBuyingPrice != null) updatedFields['productBuyingPrice'] = newBuyingPrice;
-    if (newQuantity != null) updatedFields['productQuantity'] = newQuantity;
-
-    if (updatedFields.isEmpty) return false;
-
-    int count = await database.update(
-      db_table,
-      updatedFields,
-      where: 'productName = ? AND store_id IS ?',
-      whereArgs: [name, storeId],
-    );
-
-    return count > 0;
-  } catch (e, stacktrace) {
-    print('Error updating by name: $e --> $stacktrace');
-    return false;
+  Future<bool> updateProductByName({
+    required String name,
+    int? storeId,
+    String? newCodeBar,
+    String? newName,
+    String? newPrice,
+    String? newBuyingPrice,
+    String? newQuantity,
+  }) async {
+    try {
+      final product = await getProductByName(name, storeId);
+      if (product == null) return false;
+      return updateProductById(
+        id: product['id'] as int,
+        newCodeBar: newCodeBar,
+        newName: newName,
+        newPrice: newPrice,
+        newBuyingPrice: newBuyingPrice,
+        newQuantity: newQuantity,
+      );
+    } catch (e, stacktrace) {
+      print('Error updating by name: $e --> $stacktrace');
+      return false;
+    }
   }
-}
 
-
-  /// Delete a product for specific store
   Future<bool> deleteProduct(String codeBar, int? storeId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      int count = await database.delete(
-        db_table,
-        where: 'productCodeBar = ? AND store_id IS ?',
-        whereArgs: [codeBar, storeId],
-      );
-      return count > 0;
+      final product = await getProductByCode(codeBar, storeId);
+      if (product == null) return false;
+      return deleteProductById(product['id'] as int);
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
     }
   }
 
-  /// Update only the buying and selling prices for a product
+  Future<bool> updateProductById({
+    required int id,
+    String? newCodeBar,
+    String? newName,
+    String? newPrice,
+    String? newBuyingPrice,
+    String? newQuantity,
+  }) async {
+    try {
+      final db = await DBfactory.getDatabase();
+      final existing = await DBfactory.stockStore.record(id).get(db);
+      if (existing == null) return false;
+
+      final updated = Map<String, Object?>.from(existing);
+      if (newCodeBar != null) updated['productCodeBar'] = newCodeBar;
+      if (newName != null) updated['productName'] = newName;
+      if (newPrice != null) updated['productPrice'] = newPrice;
+      if (newBuyingPrice != null) updated['productBuyingPrice'] = newBuyingPrice;
+      if (newQuantity != null) updated['productQuantity'] = newQuantity;
+
+      await DBfactory.stockStore.record(id).put(db, updated);
+      return true;
+    } catch (e, stacktrace) {
+      print('Error updating by id: $e --> $stacktrace');
+      return false;
+    }
+  }
+
+  Future<bool> deleteProductById(int id) async {
+    try {
+      final db = await DBfactory.getDatabase();
+      await DBfactory.stockStore.record(id).delete(db);
+      return true;
+    } catch (e, stacktrace) {
+      print('Error deleting by id: $e --> $stacktrace');
+      return false;
+    }
+  }
+
   Future<bool> updateProductPrices({
     required String codeBar,
     int? storeId,
     double? newBuyingPrice,
     double? newSellingPrice,
   }) async {
-    try {
-      final database = await DBfactory.getDatabase();
-      Map<String, dynamic> updatedFields = {};
-      if (newBuyingPrice != null) updatedFields['productBuyingPrice'] = newBuyingPrice.toString();
-      if (newSellingPrice != null) updatedFields['productPrice'] = newSellingPrice.toString();
-      if (updatedFields.isEmpty) return false;
-
-      int count = await database.update(
-        db_table,
-        updatedFields,
-        where: 'productCodeBar = ? AND store_id IS ?',
-        whereArgs: [codeBar, storeId],
-      );
-
-      return count > 0;
-    } catch (e, stacktrace) {
-      print('Error updating prices: $e --> $stacktrace');
-      return false;
-    }
+    return updateProduct(
+      codeBar: codeBar,
+      storeId: storeId,
+      newBuyingPrice: newBuyingPrice?.toString(),
+      newPrice: newSellingPrice?.toString(),
+    );
   }
 
   Future<List<String>> getAllProductNames(int? storeId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      final result = await database.query(
-        db_table,
-        columns: ['productName'],
-        where: 'store_id IS ?',
-        whereArgs: [storeId],
-      );
-      return result.map((row) => row['productName'] as String? ?? '').toList();
+      final products = await getProductsByStore(storeId);
+      return products
+          .map((product) => product['productName']?.toString() ?? 'بدون اسم')
+          .where((name) => name.isNotEmpty)
+          .toList();
     } catch (e, stacktrace) {
-      print("Error fetching product names: $e --> $stacktrace");
+      print('Error fetching product names: $e --> $stacktrace');
       return [];
     }
   }
 
-  /// Get all products for a store
   Future<List<Map<String, dynamic>>> getProductsByStore(int? storeId) async {
     try {
-      final database = await DBfactory.getDatabase();
-      return await database.query(
-        db_table,
-        where: 'store_id IS ?',
-        whereArgs: [storeId],
-        orderBy: 'id DESC',
-      );
+      final db = await DBfactory.getDatabase();
+      final snapshots = await DBfactory.stockStore.find(db);
+      final stocks = snapshots
+          .map((snapshot) => _normalize(snapshot.key, snapshot.value))
+          .where((stock) => stock['store_id'] == (storeId ?? 0))
+          .toList()
+        ..sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
+      return stocks;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return [];
     }
   }
 
-  /// Import products from CSV for a specific store
-  Future<void> importFromCsv(File csvFile, int? storeId) async {
-    try {
-      final database = await DBfactory.getDatabase();
-      final content = await csvFile.readAsString();
-      List<List<dynamic>> rows = const CsvToListConverter().convert(content);
+  Future<String> exportToCsvString(int? storeId) async {
+    final stocks = await getProductsByStore(storeId);
+    final rows = <List<dynamic>>[
+      ['productName', 'productPrice', 'productBuyingPrice', 'productCodeBar', 'productQuantity'],
+      ...stocks.map((s) => [
+            s['productName'] ?? '',
+            s['productPrice'] ?? '',
+            s['productBuyingPrice'] ?? '',
+            s['productCodeBar'] ?? '',
+            s['productQuantity'] ?? '',
+          ])
+    ];
+    return const ListToCsvConverter().convert(rows);
+  }
 
-      for (int i = 1; i < rows.length; i++) {
-        final row = rows[i];
-        await database.insert(
-          db_table,
-          {
-            'store_id': storeId,
-            'productName': row[0].toString().isEmpty ? 'Unnamed' : row[0].toString(),
-            'productPrice': row.length > 1 ? row[1].toString() : null,
-            'productBuyingPrice': row.length > 2 ? row[2].toString() : null,
-            'productCodeBar': row.length > 3 ? row[3].toString() : null,
-            'productQuantity': row.length > 4 ? row[4].toString() : null,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
+  Future<int?> insertRecord(Map<String, dynamic> data) async {
+    try {
+      return insertProduct(
+        storeId: data['store_id'] as int?,
+        name: data['productName']?.toString() ?? '',
+        price: data['productPrice']?.toString(),
+        buyingPrice: data['productBuyingPrice']?.toString(),
+        codeBar: data['productCodeBar']?.toString(),
+        quantity: data['productQuantity']?.toString(),
+      );
     } catch (e, stacktrace) {
-      print("Error importing CSV: $e --> $stacktrace");
+      print('$e --> $stacktrace');
+      return null;
     }
   }
 
-  /// Export products for a specific store
-  Future<void> exportToCsv(File csvFile, int? storeId) async {
+  Future<bool> updateQuantity({
+    required String codeBar,
+    int? storeId,
+    required double delta,
+  }) async {
     try {
-      final database = await DBfactory.getDatabase();
-      final records = await database.query(
-        db_table,
-        where: 'store_id IS ?',
-        whereArgs: [storeId],
+      final product = await getProductByCode(codeBar, storeId);
+      if (product == null) return false;
+
+      final current = double.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
+      return updateProductById(
+        id: product['id'] as int,
+        newQuantity: (current + delta).toString(),
       );
-      List<List<dynamic>> rows = [
-        ['productName', 'productPrice', 'productBuyingPrice', 'productCodeBar', 'productQuantity'],
-        ...records.map((r) => [
-              r['productName'],
-              r['productPrice'] ?? '',
-              r['productBuyingPrice'] ?? '',
-              r['productCodeBar'] ?? '',
-              r['productQuantity'] ?? '',
-            ])
-      ];
-      String csv = const ListToCsvConverter().convert(rows);
-      await csvFile.writeAsString(csv);
     } catch (e, stacktrace) {
-      print("Error exporting CSV: $e --> $stacktrace");
+      print('Error updating quantity: $e --> $stacktrace');
+      return false;
     }
+  }
+
+  Future<List<int>> insertRecords(List<Map<String, dynamic>> records) async {
+    final ids = <int>[];
+    try {
+      for (final record in records) {
+        final id = await insertRecord(record);
+        if (id != null) {
+          ids.add(id);
+        }
+      }
+      return ids;
+    } catch (e, stacktrace) {
+      print('$e --> $stacktrace');
+      return [];
+    }
+  }
+
+  Map<String, dynamic> _normalize(int id, Map<String, Object?> raw) {
+    return {
+      'id': id,
+      'store_id': raw['store_id'] as int? ?? 0,
+      'productName': raw['productName']?.toString() ?? '',
+      'productPrice': raw['productPrice']?.toString(),
+      'productBuyingPrice': raw['productBuyingPrice']?.toString(),
+      'productCodeBar': raw['productCodeBar']?.toString(),
+      'productQuantity': raw['productQuantity']?.toString(),
+    };
   }
 }
