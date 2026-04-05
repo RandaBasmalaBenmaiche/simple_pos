@@ -13,13 +13,14 @@ class SimpleAuthService {
   static const String _username = 'djalil';
   static const String _authEmail = String.fromEnvironment(
     'SUPABASE_AUTH_EMAIL',
-    defaultValue: 'benmaichedjallil@gmail.com',
+    defaultValue: '',
   );
 
   final ValueNotifier<bool> isLoggedIn = ValueNotifier<bool>(false);
   StreamSubscription<AuthState>? _authSubscription;
 
-  bool get isConfigured => SupabaseProjectConfig.isConfigured;
+  bool get isConfigured =>
+      SupabaseProjectConfig.isConfigured && _authEmail.isNotEmpty;
   bool _isAllowedSession(Session? session) =>
       session?.user.email?.toLowerCase() == _authEmail.toLowerCase();
 

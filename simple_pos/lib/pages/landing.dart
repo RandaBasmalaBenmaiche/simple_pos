@@ -12,33 +12,31 @@ import 'package:simple_pos/components/priceDialog.dart';
 class Landing extends StatelessWidget {
   const Landing({super.key});
 
-  // Admin password for accessing private space (POSPageOverview)
-  // Change this to your desired password
-  static const _adminPassword = "18071970";
+  static const _privateSpacePassword = '18071970';
 
-  Future<void> _showPasswordDialog(BuildContext context) async {
-    final TextEditingController passwordController = TextEditingController();
-    final FocusNode passwordFocusNode = FocusNode();
+  Future<void> _showPrivateSpaceDialog(BuildContext context) async {
+    final passwordController = TextEditingController();
+    final passwordFocusNode = FocusNode();
 
-    Future<void> checkPassword(BuildContext dialogContext) async {
-      if (passwordController.text == _adminPassword) {
-        Navigator.of(dialogContext).pop();
-        if (!context.mounted) return;
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const POSPageOverview()),
-        );
-      } else {
+    Future<void> submit(BuildContext dialogContext) async {
+      if (passwordController.text != _privateSpacePassword) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("كلمة المرور غير صحيحة")),
+          const SnackBar(content: Text('كلمة المرور غير صحيحة')),
         );
+        return;
       }
+
+      Navigator.of(dialogContext).pop();
+      if (!context.mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const POSPageOverview()),
+      );
     }
 
     await showDialog(
       context: context,
       builder: (dialogContext) {
-        // ✅ Request focus after dialog is built
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (passwordFocusNode.context != null) {
             passwordFocusNode.requestFocus();
@@ -47,10 +45,7 @@ class Landing extends StatelessWidget {
 
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Text(
-            "أدخل كلمة المرور",
-            textAlign: TextAlign.center,
-          ),
+          title: const Text('أدخل كلمة مرور الفضاء الخاص', textAlign: TextAlign.center),
           content: TextField(
             controller: passwordController,
             focusNode: passwordFocusNode,
@@ -58,26 +53,25 @@ class Landing extends StatelessWidget {
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
-              hintText: "كلمة المرور",
+              hintText: 'كلمة المرور',
               border: OutlineInputBorder(),
             ),
-            onSubmitted: (_) => checkPassword(dialogContext),
+            onSubmitted: (_) => submit(dialogContext),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("إلغاء"),
+              child: const Text('إلغاء'),
             ),
             ElevatedButton(
-              onPressed: () => checkPassword(dialogContext),
-              child: const Text("دخول"),
+              onPressed: () => submit(dialogContext),
+              child: const Text('دخول'),
             ),
           ],
         );
       },
     );
 
-    // ✅ Dispose after dialog closes
     passwordController.dispose();
     passwordFocusNode.dispose();
   }
@@ -152,7 +146,7 @@ class Landing extends StatelessWidget {
                           text: "المخزن",
                         ),
                         MyIconButton(
-                          onPressed: () => _showPasswordDialog(context),
+                          onPressed: () => _showPrivateSpaceDialog(context),
                           imagePath: "assets/icons/locked.png",
                           text: "الفضاء الخاص",
                         ),

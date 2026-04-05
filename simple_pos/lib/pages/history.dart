@@ -126,16 +126,6 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   List<int> months = [];
   List<int> days = [];
 
-  // Admin password for viewing profit/debts
-  // Change this to your desired password
-  static const _adminPassword = '1234';
-
-  bool _obscureText = true;
-  bool _isAuth = false;
-
-  bool _obscureTextCust = true;
-  bool _isAuthCusy = false;
-
   double totalProfit = 0;
   double totalDebts = 0;
 
@@ -232,71 +222,6 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
     totalProfit = filtered.fold(0, (sum, inv) => sum + (double.tryParse(inv['profit']?.toString() ?? '') ?? 0));
     invoices = filtered;
     setState(() {});
-  }
-
-  /// ✅ Visibility toggles remain unchanged
-  void _toggleVisibility() async {
-    if (_isAuth) {
-      setState(() {
-        _isAuth = !_isAuth;
-        _obscureText = !_obscureText;
-      });
-      return;
-    }
-    String? password = await _showPasswordDialog();
-    if (password == _adminPassword) {
-      setState(() {
-        _obscureText = false;
-        _isAuth = !_isAuth;
-      });
-    } else if (password != null) {
-      _showError("كلمة المرور غير صحيحة");
-    }
-  }
-
-  void _toggleVisibilityCust() async {
-    if (_isAuthCusy) {
-      setState(() {
-        _isAuthCusy = !_isAuthCusy;
-        _obscureTextCust = !_obscureTextCust;
-      });
-      return;
-    }
-    String? password = await _showPasswordDialog();
-    if (password == _adminPassword) {
-      setState(() {
-        _obscureTextCust = false;
-        _isAuthCusy = !_isAuthCusy;
-      });
-    } else if (password != null) {
-      _showError("كلمة المرور غير صحيحة");
-    }
-  }
-
-  Future<String?> _showPasswordDialog() async {
-    final TextEditingController passController = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("أدخل كلمة المرور"),
-          content: TextField(controller: passController, obscureText: true),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
-            TextButton(
-              onPressed: () => Navigator.pop(context, passController.text),
-              child: const Text("دخول"),
-            ),
-          ],
-        );
-      },
-    );
-    passController.dispose();
-    return result;
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _pickStartDate() async {
@@ -435,16 +360,10 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   }
 
   Widget _buildTotals() {
-    return Column(
-      children: [
-        //_buildTotalField("الربح الكلي", totalProfit, _obscureText, _toggleVisibility),
-       // const SizedBox(height: 10),
-       // _buildTotalField("مجموع الديون", totalDebts, _obscureTextCust, _toggleVisibilityCust),
-      ],
-    );
+    return const Column(children: []);
   }
 
-  Widget _buildTotalField(String label, double value, bool obscure, VoidCallback toggle) {
+  Widget _buildTotalField(String label, double value) {
     return Container(
       decoration: BoxDecoration(color: MyColors.secondColor(context), borderRadius: BorderRadius.circular(15)),
       child: SizedBox(
@@ -457,14 +376,11 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
               child: TextField(
                 controller: TextEditingController(text: value.toStringAsFixed(2)),
                 readOnly: true,
-                obscureText: obscure,
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 decoration: const InputDecoration(border: InputBorder.none),
               ),
             ),
             Text(" $label: ", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 10),
-            IconButton(icon: Icon(obscure ? Icons.visibility : Icons.visibility_off, size: 30), onPressed: toggle),
           ],
         ),
       ),
