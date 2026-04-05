@@ -1,7 +1,7 @@
-import 'package:sembast/sembast.dart';
-
 import '../dbFactory.dart';
 import 'tablecustomers.dart';
+import '../../sync/sync_service.dart';
+import '../../supabase/web_runtime.dart';
 
 class DInvoiceTable {
   DInvoiceTable();
@@ -72,22 +72,34 @@ class DInvoiceTable {
   Future<int?> custinsertRecord(Map<String, dynamic> data) async {
     try {
       final db = await DBfactory.getDatabase();
-      return db.transaction((txn) async {
+      final deviceId = await DBfactory.getDeviceId();
+      final id = await db.transaction((txn) async {
         final id = await DBfactory.allocateId(txn, 'invoices');
-        await DBfactory.invoicesStore.record(id).put(txn, {
+        final record = DBfactory.withSyncMetadata({
           'id': id,
           'store_id': data['store_id'] as int? ?? 0,
           'date': data['date']?.toString() ?? '',
           'total': data['total']?.toString() ?? '',
           'customer_name': data['customer_name']?.toString(),
           'customer_id': data['customer_id'] as int?,
+          'customer_sync_id': data['customer_sync_id']?.toString(),
           'total_debt_customer':
               data['total_debt_customer']?.toString() ?? '0',
           'profit': data['profit']?.toString() ?? '0',
-        });
+        }, deviceId: deviceId);
+        await DBfactory.invoicesStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(txn, table: 'invoices', record: record);
         print('inserted:\t$data');
         return id;
       });
+      if (id != null) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return id;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return null;
@@ -104,20 +116,36 @@ class DInvoiceTable {
   }) async {
     try {
       final db = await DBfactory.getDatabase();
-      final existing = await DBfactory.invoicesStore.record(id).get(db);
-      if (existing == null) return false;
+      final updated = await db.transaction((txn) async {
+        final existing = await DBfactory.invoicesStore.record(id).get(txn);
+        if (existing == null) return false;
 
-      final updated = Map<String, Object?>.from(existing);
-      if (total != null) updated['total'] = total;
-      if (profit != null) updated['profit'] = profit.toString();
-      if (customerName != null) updated['customer_name'] = customerName;
-      if (customerId != null) updated['customer_id'] = customerId;
-      if (totalDebtCustomer != null) {
-        updated['total_debt_customer'] = totalDebtCustomer;
+        final merged = Map<String, Object?>.from(existing);
+        if (total != null) merged['total'] = total;
+        if (profit != null) merged['profit'] = profit.toString();
+        if (customerName != null) merged['customer_name'] = customerName;
+        if (customerId != null) merged['customer_id'] = customerId;
+        if (totalDebtCustomer != null) {
+          merged['total_debt_customer'] = totalDebtCustomer;
+        }
+
+        final record = DBfactory.withSyncMetadata(
+          merged,
+          syncId: existing['sync_id']?.toString(),
+          deviceId: existing['device_id']?.toString(),
+        );
+        await DBfactory.invoicesStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(txn, table: 'invoices', record: record);
+        return true;
+      });
+      if (updated) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
       }
-
-      await DBfactory.invoicesStore.record(id).put(db, updated);
-      return true;
+      return updated;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
@@ -146,8 +174,14 @@ class DInvoiceTable {
   Map<String, dynamic> _normalize(int id, Map<String, Object?> raw) {
     return {
       'id': id,
+      'sync_id': raw['sync_id']?.toString(),
+      'sync_status': raw['sync_status']?.toString() ?? 'pending',
+      'updated_at': raw['updated_at']?.toString(),
+      'last_synced_at': raw['last_synced_at']?.toString(),
+      'device_id': raw['device_id']?.toString(),
       'store_id': raw['store_id'] as int? ?? 0,
       'customer_id': raw['customer_id'] as int?,
+      'customer_sync_id': raw['customer_sync_id']?.toString(),
       'customer_name': raw['customer_name']?.toString(),
       'total_debt_customer': raw['total_debt_customer']?.toString() ?? '0',
       'date': raw['date']?.toString() ?? '',
@@ -192,20 +226,36 @@ class DInvoiceItemsTable {
   Future<int?> insertItem(Map<String, dynamic> item) async {
     try {
       final db = await DBfactory.getDatabase();
-      return db.transaction((txn) async {
+      final deviceId = await DBfactory.getDeviceId();
+      final id = await db.transaction((txn) async {
         final id = await DBfactory.allocateId(txn, 'invoice_items');
-        await DBfactory.invoiceItemsStore.record(id).put(txn, {
+        final record = DBfactory.withSyncMetadata({
           'id': id,
           'invoice_id': item['invoice_id'] as int? ?? 0,
+          'invoice_sync_id': item['invoice_sync_id']?.toString(),
           'productCodeBar': item['productCodeBar']?.toString() ?? '',
           'productName': item['productName']?.toString() ?? '',
           'quantity': item['quantity']?.toString() ?? '',
           'price': item['price']?.toString() ?? '',
           'profit': item['profit']?.toString() ?? '',
           'totalPrice': item['totalPrice']?.toString() ?? '',
-        });
+        }, deviceId: deviceId);
+        await DBfactory.invoiceItemsStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(
+          txn,
+          table: 'invoice_items',
+          record: record,
+        );
         return id;
       });
+      if (id != null) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return id;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return null;
@@ -231,7 +281,13 @@ class DInvoiceItemsTable {
   Map<String, dynamic> _normalize(int id, Map<String, Object?> raw) {
     return {
       'id': id,
+      'sync_id': raw['sync_id']?.toString(),
+      'sync_status': raw['sync_status']?.toString() ?? 'pending',
+      'updated_at': raw['updated_at']?.toString(),
+      'last_synced_at': raw['last_synced_at']?.toString(),
+      'device_id': raw['device_id']?.toString(),
       'invoice_id': raw['invoice_id'] as int? ?? 0,
+      'invoice_sync_id': raw['invoice_sync_id']?.toString(),
       'productCodeBar': raw['productCodeBar']?.toString() ?? '',
       'productName': raw['productName']?.toString() ?? '',
       'quantity': raw['quantity']?.toString() ?? '',

@@ -1,7 +1,8 @@
 import 'package:csv/csv.dart';
-import 'package:sembast/sembast.dart';
 
 import '../dbFactory.dart';
+import '../../sync/sync_service.dart';
+import '../../supabase/web_runtime.dart';
 
 class DStockTable {
   DStockTable({Object? isar});
@@ -16,9 +17,10 @@ class DStockTable {
   }) async {
     try {
       final db = await DBfactory.getDatabase();
-      return db.transaction((txn) async {
+      final deviceId = await DBfactory.getDeviceId();
+      final id = await db.transaction((txn) async {
         final id = await DBfactory.allocateId(txn, 'stock');
-        await DBfactory.stockStore.record(id).put(txn, {
+        final record = DBfactory.withSyncMetadata({
           'id': id,
           'store_id': storeId ?? 0,
           'productName': name,
@@ -26,9 +28,19 @@ class DStockTable {
           'productBuyingPrice': buyingPrice,
           'productCodeBar': codeBar,
           'productQuantity': quantity,
-        });
+        }, deviceId: deviceId);
+        await DBfactory.stockStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(txn, table: 'stock', record: record);
         return id;
       });
+      if (id != null) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return id;
     } catch (e, stacktrace) {
       print('Insert error: $e --> $stacktrace');
       return null;
@@ -152,18 +164,36 @@ class DStockTable {
   }) async {
     try {
       final db = await DBfactory.getDatabase();
-      final existing = await DBfactory.stockStore.record(id).get(db);
-      if (existing == null) return false;
+      final updated = await db.transaction((txn) async {
+        final existing = await DBfactory.stockStore.record(id).get(txn);
+        if (existing == null) return false;
 
-      final updated = Map<String, Object?>.from(existing);
-      if (newCodeBar != null) updated['productCodeBar'] = newCodeBar;
-      if (newName != null) updated['productName'] = newName;
-      if (newPrice != null) updated['productPrice'] = newPrice;
-      if (newBuyingPrice != null) updated['productBuyingPrice'] = newBuyingPrice;
-      if (newQuantity != null) updated['productQuantity'] = newQuantity;
+        final merged = Map<String, Object?>.from(existing);
+        if (newCodeBar != null) merged['productCodeBar'] = newCodeBar;
+        if (newName != null) merged['productName'] = newName;
+        if (newPrice != null) merged['productPrice'] = newPrice;
+        if (newBuyingPrice != null) {
+          merged['productBuyingPrice'] = newBuyingPrice;
+        }
+        if (newQuantity != null) merged['productQuantity'] = newQuantity;
 
-      await DBfactory.stockStore.record(id).put(db, updated);
-      return true;
+        final record = DBfactory.withSyncMetadata(
+          merged,
+          syncId: existing['sync_id']?.toString(),
+          deviceId: existing['device_id']?.toString(),
+        );
+        await DBfactory.stockStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(txn, table: 'stock', record: record);
+        return true;
+      });
+      if (updated) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return updated;
     } catch (e, stacktrace) {
       print('Error updating by id: $e --> $stacktrace');
       return false;
@@ -173,8 +203,30 @@ class DStockTable {
   Future<bool> deleteProductById(int id) async {
     try {
       final db = await DBfactory.getDatabase();
-      await DBfactory.stockStore.record(id).delete(db);
-      return true;
+      final deleted = await db.transaction((txn) async {
+        final existing = await DBfactory.stockStore.record(id).get(txn);
+        if (existing == null) return false;
+
+        final syncId = existing['sync_id']?.toString();
+        if (syncId == null || syncId.isEmpty) return false;
+
+        await DBfactory.stockStore.record(id).delete(txn);
+        await DBfactory.queueDelete(
+          txn,
+          table: 'stock',
+          recordId: id,
+          recordSyncId: syncId,
+        );
+        return true;
+      });
+      if (deleted) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return deleted;
     } catch (e, stacktrace) {
       print('Error deleting by id: $e --> $stacktrace');
       return false;
@@ -294,6 +346,11 @@ class DStockTable {
   Map<String, dynamic> _normalize(int id, Map<String, Object?> raw) {
     return {
       'id': id,
+      'sync_id': raw['sync_id']?.toString(),
+      'sync_status': raw['sync_status']?.toString() ?? 'pending',
+      'updated_at': raw['updated_at']?.toString(),
+      'last_synced_at': raw['last_synced_at']?.toString(),
+      'device_id': raw['device_id']?.toString(),
       'store_id': raw['store_id'] as int? ?? 0,
       'productName': raw['productName']?.toString() ?? '',
       'productPrice': raw['productPrice']?.toString(),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:data_table_2/data_table_2.dart';
+import 'package:flutter/services.dart';
+import 'package:simple_pos/components/scrollArrowButtons.dart';
+import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 
 class POSStockItemsTable extends StatefulWidget {
@@ -22,118 +24,184 @@ class POSStockItemsTable extends StatefulWidget {
 
 class _POSStockItemsTableState extends State<POSStockItemsTable> {
   final Map<int, TextEditingController> _controllers = {};
+  final Map<int, FocusNode> _focusNodes = {};
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void didUpdateWidget(covariant POSStockItemsTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Build a set of current item IDs
     final currentIds = widget.items.map((item) => item['id'] as int).toSet();
-    // Clean up controllers for removed items
-    final keysToRemove = _controllers.keys.where((id) => !currentIds.contains(id)).toList();
+    final keysToRemove =
+        _controllers.keys.where((id) => !currentIds.contains(id)).toList();
     for (final key in keysToRemove) {
       _controllers[key]?.dispose();
       _controllers.remove(key);
+      _focusNodes[key]?.dispose();
+      _focusNodes.remove(key);
     }
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     for (final controller in _controllers.values) {
       controller.dispose();
+    }
+    for (final focusNode in _focusNodes.values) {
+      focusNode.dispose();
     }
     super.dispose();
   }
 
+  Future<void> _scrollBy(double delta) async {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final target =
+        (position.pixels + delta).clamp(position.minScrollExtent, position.maxScrollExtent);
+    await _scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: DataTable2(
-        headingRowColor: MaterialStateProperty.all(MyColors.mainColor(context)),
-        headingTextStyle: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-          fontSize: 20,
-        ),
-        dataRowColor: MaterialStateProperty.all(MyColors.secondColor(context)),
-        dataRowHeight: 60,
-        columnSpacing: 12,
-        horizontalMargin: 12,
-        minWidth: 700,
-        columns: const [
-          DataColumn2(label: Text("سعر الوحدة"), size: ColumnSize.S),
-          DataColumn2(label: Text("الكمية"), size: ColumnSize.S),
-          DataColumn2(label: Text("الاسم"), size: ColumnSize.L),
-          DataColumn2(label: Text("الكود"), size: ColumnSize.M),
-          DataColumn2(label: Text(""), size: ColumnSize.S), // actions column
-        ],
-        rows: List.generate(widget.items.length, (index) {
-          final item = widget.items[index];
-          final itemId = item['id'] as int;
-
-          // Handle optional fields with safe defaults
-          final price = item['productPrice']?.toString();
-          final quantity = item['productQuantity']?.toString() ?? '0';
-          final name = item['productName']?.toString();
-          final codeBar = item['productCodeBar']?.toString();
-
-          return DataRow(
-            cells: [
-              // Selling Price (null-safe with default 0.00)
-              DataCell(
-                Text(
-                  double.tryParse(price ?? '')?.toStringAsFixed(2) ?? '0.00',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-                ),
-              ),
-
-              // Quantity (null-safe with default 0) - use item ID as key
-              DataCell(
-                SizedBox(
-                  width: 60,
-                  child: TextField(
-                    controller: _controllers.putIfAbsent(itemId, () => TextEditingController(
-                      text: quantity,
-                    )),
-                    keyboardType: TextInputType.number,
-                    onChanged: (value) {
-                      widget.onQuantityChanged(index, value);
-                    },
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      contentPadding: EdgeInsets.all(8),
-                      border: OutlineInputBorder(),
-                    ),
+    return Container(
+      decoration: BoxDecoration(
+        color: MyColors.secondColor(context),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: MyColors.mainColor(context),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: const Row(
+              children: [
+                Expanded(flex: 2, child: Text("سعر البيع", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))),
+                Expanded(flex: 2, child: Text("الكمية", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))),
+                Expanded(flex: 4, child: Text("الاسم", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))),
+                Expanded(flex: 3, child: Text("الكود", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))),
+                SizedBox(width: 48),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: ScrollArrowButtons(
+              onScrollUp: () => _scrollBy(-220),
+              onScrollDown: () => _scrollBy(220),
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(12),
+              itemCount: widget.items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final item = widget.items[index];
+                final itemId = item['id'] as int;
+                final controller = _controllers.putIfAbsent(
+                  itemId,
+                  () => TextEditingController(
+                    text: DisplayFormatters.quantity(item['productQuantity']),
                   ),
-                ),
-              ),
+                );
+                final focusNode =
+                    _focusNodes.putIfAbsent(itemId, () => FocusNode());
 
-              // Product Name (null-safe with default)
-              DataCell(Text(
-                name ?? 'بدون اسم',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-              )),
-
-              // Product Code (null-safe with default)
-              DataCell(Text(
-                codeBar ?? 'بدون كود',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-              )),
-
-              // Actions
-              DataCell(
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => widget.onDelete(index),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        }),
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          DisplayFormatters.price(item['productPrice']),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: SizedBox(
+                            width: 68,
+                            height: 42,
+                            child: TextField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              onTap: () {
+                                controller.selection = TextSelection(
+                                  baseOffset: 0,
+                                  extentOffset: controller.text.length,
+                                );
+                              },
+                              onChanged: (value) {
+                                final normalized = DisplayFormatters.quantity(value);
+                                if (controller.text != normalized) {
+                                  controller.value = TextEditingValue(
+                                    text: normalized,
+                                    selection: TextSelection.collapsed(
+                                      offset: normalized.length,
+                                    ),
+                                  );
+                                }
+                                widget.onQuantityChanged(
+                                  index,
+                                  int.parse(normalized).toString(),
+                                );
+                              },
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 4,
+                        child: Text(
+                          item['productName']?.toString() ?? 'بدون اسم',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          item['productCodeBar']?.toString() ?? 'بدون كود',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => widget.onDelete(index),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

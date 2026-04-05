@@ -73,6 +73,28 @@ class _ClientSelectorState extends State<ClientSelector> {
   }
 
   @override
+  void didUpdateWidget(covariant ClientSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialClient != widget.initialClient) {
+      if (widget.initialClient == null) {
+        setState(() {
+          _selectedClient = null;
+          _controller.clear();
+          _suggestions = [];
+          _showSuggestions = false;
+          _errorMessage = null;
+          _isIdMode = false;
+        });
+      } else {
+        _selectedClient = widget.initialClient;
+        final id = widget.initialClient!['id'] as int;
+        final formattedId = DCustomersTable.formatCustomerId(id);
+        _controller.text = "${widget.initialClient!['name']} — #$formattedId";
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     _focusNode.dispose();

@@ -1,8 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:simple_pos/components/scrollArrowButtons.dart';
 import 'package:simple_pos/components/myAppBar.dart';
+import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
 import 'package:simple_pos/services/local_database/model/tableinvoice.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
+import 'package:simple_pos/services/supabase/web_realtime_service.dart';
+import 'package:simple_pos/services/supabase/web_runtime.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -54,9 +59,9 @@ Future<pw.Document> generateInvoicePdf(
               data: List.generate(items.length, (i) {
                 final item = items[i];
                 final productName = item['productName'] ?? 'غير محدد';
-                final quantity = (item['quantity'] ?? '0').toString();
-                final price = (double.tryParse(item['price']?.toString() ?? '') ?? 0.0).toStringAsFixed(2);
-                final total = (double.tryParse(item['totalPrice']?.toString() ?? '') ?? 0.0).toStringAsFixed(2);
+                final quantity = DisplayFormatters.quantity(item['quantity']);
+                final price = DisplayFormatters.price(item['price']);
+                final total = DisplayFormatters.price(item['totalPrice']);
 
                 return [
                   total,
@@ -107,6 +112,8 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   List<Map<String, dynamic>> All_customers = [];
   List<Map<String, dynamic>> invoices = [];
   TextEditingController searchController = TextEditingController();
+  StreamSubscription<Set<String>>? _realtimeSub;
+  final ScrollController _scrollController = ScrollController();
 
   int? selectedYear;
   int? selectedMonth;
@@ -324,12 +331,37 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
     final currentStoreId = BlocProvider.of<StoreCubit>(context, listen: false).state;
     _loadInvoices(currentStoreId);
     searchController.addListener(_onSearchChanged);
+    if (useSupabaseWeb) {
+      _realtimeSub = WebRealtimeService.instance.changes.listen((tables) {
+        if ((tables.contains('invoices') ||
+                tables.contains('invoice_items') ||
+                tables.contains('customers')) &&
+            mounted) {
+          final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
+          _loadInvoices(store);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
+    _realtimeSub?.cancel();
     searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scrollBy(double delta) async {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final target =
+        (position.pixels + delta).clamp(position.minScrollExtent, position.maxScrollExtent);
+    await _scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
@@ -476,73 +508,88 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   Widget _buildInvoicesList() {
     return invoices.isNotEmpty
         ? Flexible(
-            child: ListView.builder(
-              itemCount: invoices.length,
-              itemBuilder: (context, index) {
-                final invoice = invoices[index];
-                final date = invoice['date']?.toString() ?? 'غير محدد';
-                final customer = invoice['customer_name']?.toString().isNotEmpty == true
-                    ? invoice['customer_name']
-                    : 'زائر';
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ExpansionTile(
-                    title: Text(
-                      "فاتورة رقم${invoice['id'] ?? '-'} - $date -- $customer",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      "المجموع: ${(double.tryParse(invoice['total']?.toString() ?? '') ?? 0.0).toStringAsFixed(2)} DA",
-                    ),
-                    children: [
-                      FutureBuilder<List<Map<String, dynamic>>>(
-                        future: DInvoiceItemsTable().getItemsByInvoiceId(invoice['id']),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData) {
-                            return const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: CircularProgressIndicator(),
-                            );
-                          }
-                          final items = snapshot.data!;
-                          if (items.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Text("لا توجد منتجات في هذه الفاتورة"),
-                            );
-                          }
-                          return Column(
-                            children: [
-                              Column(
-                                children: items.map((item) {
-                                  return ListTile(
-                                    title: Text(item['productName']?.toString() ?? "غير محدد"),
-                                    subtitle: Text(
-                                        "الكود: ${item['productCodeBar'] ?? '-'} - الكمية: ${item['quantity'] ?? '0'}"),
-                                    trailing: Text(
-                                      "${(double.tryParse(item['totalPrice']?.toString() ?? '') ?? 0.0).toStringAsFixed(2)} DA",
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () async {
-                                  final pdf = await generateInvoicePdf(invoice, items);
-                                  await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
-                                },
-                                icon: const Icon(Icons.picture_as_pdf),
-                                label: const Text("حفظ PDF"),
-                              ),
-                              const SizedBox(height: 10),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: ScrollArrowButtons(
+                    onScrollUp: () => _scrollBy(-260),
+                    onScrollDown: () => _scrollBy(260),
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    itemCount: invoices.length,
+                    itemBuilder: (context, index) {
+                      final invoice = invoices[index];
+                      final date = invoice['date']?.toString() ?? 'غير محدد';
+                      final customer = invoice['customer_name']?.toString().isNotEmpty == true
+                          ? invoice['customer_name']
+                          : 'زائر';
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: ExpansionTile(
+                          title: Text(
+                            "فاتورة رقم${invoice['id'] ?? '-'} - $date -- $customer",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            "المجموع: ${(double.tryParse(invoice['total']?.toString() ?? '') ?? 0.0).toStringAsFixed(2)} DA",
+                          ),
+                          children: [
+                            FutureBuilder<List<Map<String, dynamic>>>(
+                              future: DInvoiceItemsTable().getItemsByInvoiceId(invoice['id']),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(8.0),
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
+                                final items = snapshot.data!;
+                                if (items.isEmpty) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(8.0),
+                                    child: Text("لا توجد منتجات في هذه الفاتورة"),
+                                  );
+                                }
+                                return Column(
+                                  children: [
+                                    Column(
+                                      children: items.map((item) {
+                                        return ListTile(
+                                          title: Text(item['productName']?.toString() ?? "غير محدد"),
+                                          subtitle: Text(
+                                              "الكود: ${item['productCodeBar'] ?? '-'} - الكمية: ${DisplayFormatters.quantity(item['quantity'])}"),
+                                          trailing: Text(
+                                            "${DisplayFormatters.price(item['totalPrice'])} DA",
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: () async {
+                                        final pdf = await generateInvoicePdf(invoice, items);
+                                        await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+                                      },
+                                      icon: const Icon(Icons.picture_as_pdf),
+                                      label: const Text("حفظ PDF"),
+                                    ),
+                                    const SizedBox(height: 10),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           )
         : const Center(child: Text("لا توجد فواتير حتى الآن"));

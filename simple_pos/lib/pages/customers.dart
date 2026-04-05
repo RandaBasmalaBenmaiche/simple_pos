@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -11,7 +12,11 @@ import 'package:simple_pos/components/payDebtDialog.dart';
 import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
+import 'package:simple_pos/services/platform/download_text.dart';
 import 'package:simple_pos/services/platform/file_text.dart';
+import 'package:simple_pos/services/supabase/web_realtime_service.dart';
+import 'package:simple_pos/services/supabase/web_runtime.dart';
+import 'package:simple_pos/services/transactions/customer_account_service.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -26,6 +31,9 @@ class _POSPageCustomersState extends State<POSPageCustomers> {
   List<Map<String, dynamic>> customers = [];
   List<Map<String, dynamic>> allCustomers = [];
   TextEditingController searchController = TextEditingController();
+  StreamSubscription<Set<String>>? _realtimeSub;
+  final CustomerAccountService _customerAccountService =
+      CustomerAccountService();
 
   @override
   void initState() {
@@ -33,11 +41,21 @@ class _POSPageCustomersState extends State<POSPageCustomers> {
     final currentStoreId = BlocProvider.of<StoreCubit>(context, listen: false).state;
     _loadCustomers(currentStoreId);
     searchController.addListener(_onSearchChanged);
+    if (useSupabaseWeb) {
+      _realtimeSub = WebRealtimeService.instance.changes.listen((tables) {
+        if ((tables.contains('customers') || tables.contains('debt_payments')) &&
+            mounted) {
+          final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
+          _loadCustomers(store);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     searchController.removeListener(_onSearchChanged);
+    _realtimeSub?.cancel();
     searchController.dispose();
     super.dispose();
   }
@@ -84,8 +102,10 @@ class _POSPageCustomersState extends State<POSPageCustomers> {
     String csv = const ListToCsvConverter().convert(rows);
 
     if (kIsWeb) {
+      await downloadTextFile('customers_export.csv', csv);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('التصدير المباشر غير متاح حالياً على الويب')),
+        const SnackBar(content: Text('تم تنزيل ملف العملاء')),
       );
       return;
     }
@@ -183,7 +203,7 @@ Future<void> importCustomersFromCSV(int storeId) async {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
-                      prefixIcon: Icon(Icons.search, color: MyColors.secondColor(context)),
+                      prefixIcon: Icon(Icons.search, color: MyColors.mainColor(context)),
                     ),
                   ),
                 ),
@@ -250,10 +270,10 @@ Future<void> importCustomersFromCSV(int storeId) async {
                   onPayDebt: (index) async {
                     final customer = customers[index];
                     await showPayDebtDialog(context, customer,  "تسديد دين للعميل" , (amount) async {
-                      final newDebt = (customer['debt'] ?? 0) - amount;
-                      await DCustomersTable().updateCustomer(
-                        id: customer['id'],
-                        debt: newDebt,
+                      await _customerAccountService.recordDebtPayment(
+                        storeId: store,
+                        customer: customer,
+                        amount: amount,
                       );
                       await _loadCustomers(store);
                     });

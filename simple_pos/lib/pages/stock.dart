@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -10,7 +11,10 @@ import 'package:simple_pos/components/stockTable.dart';
 import 'package:simple_pos/components/updateProductDialog.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
+import 'package:simple_pos/services/platform/download_text.dart';
 import 'package:simple_pos/services/platform/file_text.dart';
+import 'package:simple_pos/services/supabase/web_realtime_service.dart';
+import 'package:simple_pos/services/supabase/web_runtime.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:simple_pos/main.dart';
@@ -26,6 +30,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
   List<Map<String, dynamic>> items = [];
   List<Map<String, dynamic>> allItems = [];
   TextEditingController searchController = TextEditingController();
+  StreamSubscription<Set<String>>? _realtimeSub;
   late final DStockTable _stockTable;
   late int _currentStoreId;
 
@@ -41,6 +46,13 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
     _currentStoreId = BlocProvider.of<StoreCubit>(context, listen: false).state;
     _loadItems(_currentStoreId);
     searchController.addListener(_onSearchChanged);
+    if (useSupabaseWeb) {
+      _realtimeSub = WebRealtimeService.instance.changes.listen((tables) {
+        if (tables.contains('stock') && mounted) {
+          _loadItems(_currentStoreId);
+        }
+      });
+    }
   }
 
   @override
@@ -53,6 +65,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
+    _realtimeSub?.cancel();
     searchController.removeListener(_onSearchChanged);
     searchController.dispose();
     super.dispose();
@@ -161,8 +174,10 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
     String csv = const ListToCsvConverter().convert(rows);
 
     if (kIsWeb) {
+      await downloadTextFile('products_export.csv', csv);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('التصدير المباشر غير متاح حالياً على الويب')),
+        const SnackBar(content: Text('تم تنزيل ملف المنتجات')),
       );
       return;
     }
@@ -216,7 +231,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
-                      prefixIcon: Icon(Icons.search, color: MyColors.secondColor(context)),
+                      prefixIcon: Icon(Icons.search, color: MyColors.mainColor(context)),
                     ),
                   ),
                 ),
@@ -271,9 +286,11 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
             ),
             const SizedBox(height: 20),
             Flexible(
-              child: SizedBox(
-                height: MediaQuery.of(context).size.height * 0.6,
-                child: POSStockItemsTable(
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.68,
+                  child: POSStockItemsTable(
                   items: items,
                   sellItems: () {},
                   onQuantityChanged: (index, newQuantity) async {
@@ -336,7 +353,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                               product['productCodeBar'] ?? '',
                               store,
                             );
-                      if (success) {
+                          if (success) {
                         setState(() {
                           items.removeAt(index);
                           if (productId != null) {
@@ -349,6 +366,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                     }
                   },
                 ),
+              ),
               ),
             ),
           ],

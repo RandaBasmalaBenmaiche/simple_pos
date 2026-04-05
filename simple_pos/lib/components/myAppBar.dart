@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:simple_pos/services/auth/simple_auth_service.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
+import 'package:simple_pos/services/supabase/web_realtime_service.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:intl/intl.dart';
 
@@ -71,6 +73,18 @@ class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
           centerTitle: true,
           toolbarHeight: 100,
           actions: [
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              onPressed: () async {
+                await WebRealtimeService.instance.dispose();
+                await SimpleAuthService.instance.logout();
+                if (!mounted) {
+                  return;
+                }
+                Navigator.of(context, rootNavigator: true)
+                    .popUntil((route) => route.isFirst);
+              },
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Center(

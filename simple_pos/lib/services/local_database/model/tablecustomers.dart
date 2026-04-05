@@ -1,6 +1,6 @@
-import 'package:sembast/sembast.dart';
-
 import '../dbFactory.dart';
+import '../../sync/sync_service.dart';
+import '../../supabase/web_runtime.dart';
 
 class DCustomersTable {
   DCustomersTable();
@@ -13,17 +13,28 @@ class DCustomersTable {
   }) async {
     try {
       final db = await DBfactory.getDatabase();
-      return db.transaction((txn) async {
+      final deviceId = await DBfactory.getDeviceId();
+      final id = await db.transaction((txn) async {
         final id = await DBfactory.allocateId(txn, 'customers');
-        await DBfactory.customersStore.record(id).put(txn, {
+        final record = DBfactory.withSyncMetadata({
           'id': id,
           'store_id': storeId,
           'name': name,
           'phone': phone,
           'debt': debt,
-        });
+        }, deviceId: deviceId);
+        await DBfactory.customersStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(txn, table: 'customers', record: record);
         return id;
       });
+      if (id != null) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return id;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return null;
@@ -85,16 +96,32 @@ class DCustomersTable {
   }) async {
     try {
       final db = await DBfactory.getDatabase();
-      final existing = await DBfactory.customersStore.record(id).get(db);
-      if (existing == null) return false;
+      final updated = await db.transaction((txn) async {
+        final existing = await DBfactory.customersStore.record(id).get(txn);
+        if (existing == null) return false;
 
-      final updated = Map<String, Object?>.from(existing);
-      if (name != null) updated['name'] = name;
-      if (phone != null) updated['phone'] = phone;
-      if (debt != null) updated['debt'] = debt;
+        final merged = Map<String, Object?>.from(existing);
+        if (name != null) merged['name'] = name;
+        if (phone != null) merged['phone'] = phone;
+        if (debt != null) merged['debt'] = debt;
 
-      await DBfactory.customersStore.record(id).put(db, updated);
-      return true;
+        final record = DBfactory.withSyncMetadata(
+          merged,
+          syncId: existing['sync_id']?.toString(),
+          deviceId: existing['device_id']?.toString(),
+        );
+        await DBfactory.customersStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(txn, table: 'customers', record: record);
+        return true;
+      });
+      if (updated) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return updated;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
@@ -124,8 +151,30 @@ class DCustomersTable {
   Future<bool> deleteCustomer(int id) async {
     try {
       final db = await DBfactory.getDatabase();
-      await DBfactory.customersStore.record(id).delete(db);
-      return true;
+      final deleted = await db.transaction((txn) async {
+        final existing = await DBfactory.customersStore.record(id).get(txn);
+        if (existing == null) return false;
+
+        final syncId = existing['sync_id']?.toString();
+        if (syncId == null || syncId.isEmpty) return false;
+
+        await DBfactory.customersStore.record(id).delete(txn);
+        await DBfactory.queueDelete(
+          txn,
+          table: 'customers',
+          recordId: id,
+          recordSyncId: syncId,
+        );
+        return true;
+      });
+      if (deleted) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return deleted;
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
       return false;
@@ -135,6 +184,11 @@ class DCustomersTable {
   Map<String, dynamic> _normalize(int id, Map<String, Object?> raw) {
     return {
       'id': id,
+      'sync_id': raw['sync_id']?.toString(),
+      'sync_status': raw['sync_status']?.toString() ?? 'pending',
+      'updated_at': raw['updated_at']?.toString(),
+      'last_synced_at': raw['last_synced_at']?.toString(),
+      'device_id': raw['device_id']?.toString(),
       'store_id': raw['store_id'] as int? ?? 0,
       'name': raw['name']?.toString() ?? '',
       'phone': raw['phone']?.toString(),

@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:simple_pos/components/scrollArrowButtons.dart';
 import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
 import 'package:simple_pos/services/local_database/model/tableinvoice.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
+import 'package:simple_pos/services/formatters/display_formatters.dart';
+import 'package:simple_pos/services/supabase/web_realtime_service.dart';
+import 'package:simple_pos/services/supabase/web_runtime.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -19,6 +24,8 @@ class _POSPageOverviewState extends State<POSPageOverview> {
   List<Map<String, dynamic>> products = [];
   double totalDebts = 0;
   double totalProfit = 0;
+  final ScrollController _scrollController = ScrollController();
+  StreamSubscription<Set<String>>? _realtimeSub;
 
   TextEditingController searchController = TextEditingController();
   DateTime? startDate;
@@ -30,13 +37,39 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
     _loadData(store);
     searchController.addListener(_onSearchChanged);
+    if (useSupabaseWeb) {
+      _realtimeSub = WebRealtimeService.instance.changes.listen((tables) {
+        if ((tables.contains('stock') ||
+                tables.contains('customers') ||
+                tables.contains('invoices')) &&
+            mounted) {
+          final currentStore =
+              BlocProvider.of<StoreCubit>(context, listen: false).state;
+          _loadData(currentStore);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     searchController.removeListener(_onSearchChanged);
+    _realtimeSub?.cancel();
+    _scrollController.dispose();
     searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scrollBy(double delta) async {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final target =
+        (position.pixels + delta).clamp(position.minScrollExtent, position.maxScrollExtent);
+    await _scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _loadData(int store) async {
@@ -316,8 +349,14 @@ class _POSPageOverviewState extends State<POSPageOverview> {
               ],
             ),
             const SizedBox(height: 20),
+            ScrollArrowButtons(
+              onScrollUp: () => _scrollBy(-220),
+              onScrollDown: () => _scrollBy(220),
+            ),
+            const SizedBox(height: 10),
             Expanded(
               child: ListView.builder(
+                controller: _scrollController,
                 itemCount: products.length,
                 itemBuilder: (context, index) {
                   final product = products[index];
@@ -325,15 +364,18 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                   final name = (product['productName'] ?? 'غير محدد').toString();
                   final code = (product['productCodeBar'] ?? '-').toString();
                   final quantity = (product['productQuantity'] ?? 0).toString();
-                  final price = (product['productPrice'] ?? 0).toString();
-                  final buyingPrice = (product['productBuyingPrice'] ?? 0).toString();
+                  final price = DisplayFormatters.price(product['productPrice']);
+                  final buyingPrice =
+                      DisplayFormatters.price(product['productBuyingPrice']);
 
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     child: ListTile(
                       onTap: () => _editProductPrice(product),
                       title: Text(name),
-                      subtitle: Text("الكود: $code - الكمية: $quantity"),
+                      subtitle: Text(
+                        "الكود: $code - الكمية: ${DisplayFormatters.quantity(quantity)}",
+                      ),
                       trailing: SizedBox(
                         width: 140,
                         child: Column(
