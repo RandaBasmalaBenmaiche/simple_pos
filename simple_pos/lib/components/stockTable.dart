@@ -98,11 +98,14 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
+            child: Scrollbar(
               controller: _scrollController,
-              padding: const EdgeInsets.all(12),
-              itemCount: widget.items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              thumbVisibility: true,
+              child: ListView.separated(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(12),
+                itemCount: widget.items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
                 final item = widget.items[index];
                 final itemId = item['id'] as int;
@@ -201,7 +204,7 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
               },
             ),
           ),
-        ],
+      )],
       ),
     );
   }

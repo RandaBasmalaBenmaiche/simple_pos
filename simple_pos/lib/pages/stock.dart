@@ -15,6 +15,7 @@ import 'package:simple_pos/services/platform/download_text.dart';
 import 'package:simple_pos/services/platform/file_text.dart';
 import 'package:simple_pos/services/supabase/web_realtime_service.dart';
 import 'package:simple_pos/services/supabase/web_runtime.dart';
+import 'package:simple_pos/services/utils/sort_utils.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:simple_pos/main.dart';
@@ -33,6 +34,8 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
   StreamSubscription<Set<String>>? _realtimeSub;
   late final DStockTable _stockTable;
   late int _currentStoreId;
+  SortMode _sortMode = SortMode.latin;
+  SortOrder _sortOrder = SortOrder.ascending;
 
   // Add this RouteObserver to your app — declare it globally
   // e.g. in main.dart: final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
@@ -92,17 +95,32 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
 
     if (mounted) {
       setState(() {
-        items = loadedItems;
-        allItems = List.from(loadedItems);
+        allItems = loadedItems;
+        items = sortProducts(allItems, _sortMode, order: _sortOrder);
       });
     }
+  }
+
+  void _toggleSortMode() {
+    setState(() {
+      _sortMode = _sortMode == SortMode.latin ? SortMode.arabic : SortMode.latin;
+      _sortOrder = SortOrder.ascending; // Reset to ascending when changing mode
+      items = sortProducts(allItems, _sortMode, order: _sortOrder);
+    });
+  }
+
+  void _toggleSortOrder() {
+    setState(() {
+      _sortOrder = _sortOrder == SortOrder.ascending ? SortOrder.descending : SortOrder.ascending;
+      items = sortProducts(allItems, _sortMode, order: _sortOrder);
+    });
   }
 
   void _onSearchChanged() {
     final query = searchController.text.toLowerCase();
 
     if (query.isEmpty) {
-      setState(() => items = List.from(allItems));
+      setState(() => items = sortProducts(allItems, _sortMode, order: _sortOrder));
       return;
     }
 
@@ -112,7 +130,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
       return code.contains(query) || name.contains(query);
     }).toList();
 
-    setState(() => items = filtered);
+    setState(() => items = sortProducts(filtered, _sortMode, order: _sortOrder));
   }
 
   Future<void> importProductsFromCSV(int store) async {
@@ -280,6 +298,40 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                     onPressed: () async {
                       await exportProductsToCSV();
                     },
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _toggleSortMode,
+                    icon: Icon(_sortMode == SortMode.latin ? Icons.sort : Icons.sort_outlined),
+                    label: Text(
+                      _sortMode == SortMode.latin ? "A-Z ↔️ العربية" : "العربية ↔️ A-Z",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: MyColors.mainColor(context),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _toggleSortOrder,
+                    icon: Icon(_sortOrder == SortOrder.ascending ? Icons.arrow_upward : Icons.arrow_downward),
+                    label: Text(
+                      _sortOrder == SortOrder.ascending ? "تصاعدي ↑" : "تنازلي ↓",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: MyColors.mainColor(context),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ],
               ),

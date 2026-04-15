@@ -9,6 +9,7 @@ import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/services/supabase/web_realtime_service.dart';
 import 'package:simple_pos/services/supabase/web_runtime.dart';
+import 'package:simple_pos/services/utils/sort_utils.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -22,6 +23,7 @@ class POSPageOverview extends StatefulWidget {
 
 class _POSPageOverviewState extends State<POSPageOverview> {
   List<Map<String, dynamic>> products = [];
+  List<Map<String, dynamic>> allProducts = [];
   double totalDebts = 0;
   double totalProfit = 0;
   final ScrollController _scrollController = ScrollController();
@@ -30,6 +32,8 @@ class _POSPageOverviewState extends State<POSPageOverview> {
   TextEditingController searchController = TextEditingController();
   DateTime? startDate;
   DateTime? endDate;
+  SortMode _sortMode = SortMode.latin;
+  SortOrder _sortOrder = SortOrder.ascending;
 
   @override
   void initState() {
@@ -115,28 +119,45 @@ class _POSPageOverviewState extends State<POSPageOverview> {
 
     if (!mounted) return;
     setState(() {
-      products = loadedProducts;
+      allProducts = loadedProducts;
+      products = sortProducts(allProducts, _sortMode, order: _sortOrder);
       totalProfit = profit;
       totalDebts = debts;
+    });
+  }
+
+  void _toggleSortMode() {
+    setState(() {
+      _sortMode = _sortMode == SortMode.latin ? SortMode.arabic : SortMode.latin;
+      _sortOrder = SortOrder.ascending; // Reset to ascending when changing mode
+      products = sortProducts(allProducts, _sortMode, order: _sortOrder);
+    });
+  }
+
+  void _toggleSortOrder() {
+    setState(() {
+      _sortOrder = _sortOrder == SortOrder.ascending ? SortOrder.descending : SortOrder.ascending;
+      products = sortProducts(allProducts, _sortMode, order: _sortOrder);
     });
   }
 
   void _onSearchChanged() {
     final query = searchController.text.toLowerCase();
     if (query.isEmpty) {
-      final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
-      _loadData(store);
+      setState(() {
+        products = sortProducts(allProducts, _sortMode, order: _sortOrder);
+      });
       return;
     }
 
-    final filtered = products.where((item) {
+    final filtered = allProducts.where((item) {
       final name = (item['productName'] ?? '').toString().toLowerCase();
       final code = (item['productCodeBar'] ?? '').toString().toLowerCase();
       return name.contains(query) || code.contains(query);
     }).toList();
 
     setState(() {
-      products = filtered;
+      products = sortProducts(filtered, _sortMode, order: _sortOrder);
     });
   }
 
@@ -336,6 +357,45 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                     endDate != null
                         ? "إلى: ${DateFormat('yyyy-MM-dd').format(endDate!)}"
                         : "اختر تاريخ النهاية",
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _toggleSortMode,
+                  icon: Icon(_sortMode == SortMode.latin ? Icons.sort : Icons.sort_outlined),
+                  label: Text(
+                    _sortMode == SortMode.latin ? "A-Z ↔️ العربية" : "العربية ↔️ A-Z",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: MyColors.mainColor(context),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: _toggleSortOrder,
+                  icon: Icon(_sortOrder == SortOrder.ascending ? Icons.arrow_upward : Icons.arrow_downward),
+                  label: Text(
+                    _sortOrder == SortOrder.ascending ? "تصاعدي ↑" : "تنازلي ↓",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: MyColors.mainColor(context),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],
