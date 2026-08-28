@@ -43,3 +43,4 @@ app.*.map.json
 /android/app/release
 
 readme.md
+PROJECT_OVERVIEW.md
