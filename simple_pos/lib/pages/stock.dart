@@ -153,9 +153,14 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
       if (csvString == null) return;
       List<List<dynamic>> csvTable = const CsvToListConverter().convert(csvString);
 
+      // Use an idempotent upsert so re-importing the same CSV does not
+      // duplicate products. Identity is (store_id, productCodeBar) with a
+      // fallback to (store_id, productName) when the barcode is empty.
+      int added = 0;
+      int updated = 0;
       for (var i = 1; i < csvTable.length; i++) {
         var row = csvTable[i];
-        await _stockTable.insertRecord({
+        final result = await _stockTable.upsertRecord({
           'store_id': store,
           'productName': row[0].toString(),
           'productPrice': row[1]?.toString().isNotEmpty == true ? row[1].toString() : null,
@@ -163,12 +168,28 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
           'productCodeBar': row[3]?.toString().isNotEmpty == true ? row[3].toString() : null,
           'productQuantity': row[4]?.toString().isNotEmpty == true ? row[4].toString() : null,
         });
+        if (result.id < 0) continue; // error
+        if (result.created) {
+          added += 1;
+        } else {
+          updated += 1;
+        }
       }
 
       await _loadItems(store);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم استيراد المنتجات بنجاح')),
-      );
+      if (added == 0 && updated == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لم يتم العثور على منتجات في الملف')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'تم استيراد المنتجات: $added جديد، $updated محدث',
+            ),
+          ),
+        );
+      }
     }
   }
 

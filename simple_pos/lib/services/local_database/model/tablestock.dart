@@ -307,6 +307,65 @@ class DStockTable {
     }
   }
 
+  /// Idempotent import entry point used by the CSV importer.
+  ///
+  /// Looks up an existing product in the same store using the same identity
+  /// the rest of the app uses: `(store_id, productCodeBar)` when a barcode is
+  /// present, otherwise `(store_id, productName)`. If a match is found, the
+  /// existing row is updated in place (preserving its `id` and `sync_id`).
+  /// Otherwise a new product is inserted.
+  ///
+  /// Returns a record describing what happened so the caller can report
+  /// counts back to the user.
+  Future<({int id, bool created})> upsertRecord(
+    Map<String, dynamic> data,
+  ) async {
+    final storeId = data['store_id'] as int?;
+    final name = data['productName']?.toString() ?? '';
+    final price = data['productPrice']?.toString();
+    final buyingPrice = data['productBuyingPrice']?.toString();
+    final codeBar = data['productCodeBar']?.toString();
+    final quantity = data['productQuantity']?.toString();
+
+    try {
+      // 1) Try to find an existing product using the same identity rules
+      //    used elsewhere in the app: barcode within a store, then name.
+      Map<String, dynamic>? existing;
+      final trimmedCode = (codeBar ?? '').trim();
+      if (trimmedCode.isNotEmpty) {
+        existing = await getProductByCode(trimmedCode, storeId);
+      }
+      existing ??= await getProductByName(name, storeId);
+
+      if (existing != null) {
+        final ok = await updateProductById(
+          id: existing['id'] as int,
+          newCodeBar: (codeBar == null || codeBar.isEmpty) ? null : codeBar,
+          newName: name.isEmpty ? null : name,
+          newPrice: (price == null || price.isEmpty) ? null : price,
+          newBuyingPrice:
+              (buyingPrice == null || buyingPrice.isEmpty) ? null : buyingPrice,
+          newQuantity: (quantity == null || quantity.isEmpty) ? null : quantity,
+        );
+        return (id: existing['id'] as int, created: !ok);
+      }
+
+      // 2) No match — insert a brand new product.
+      final newId = await insertProduct(
+        storeId: storeId,
+        name: name,
+        price: price,
+        buyingPrice: buyingPrice,
+        codeBar: codeBar,
+        quantity: quantity,
+      );
+      return (id: newId ?? -1, created: newId != null);
+    } catch (e, stacktrace) {
+      print('upsertRecord error: $e --> $stacktrace');
+      return (id: -1, created: false);
+    }
+  }
+
   Future<bool> updateQuantity({
     required String codeBar,
     int? storeId,
