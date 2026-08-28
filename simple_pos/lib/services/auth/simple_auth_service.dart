@@ -17,6 +17,13 @@ class SimpleAuthService {
   );
 
   final ValueNotifier<bool> isLoggedIn = ValueNotifier<bool>(false);
+
+  /// True when the active Supabase session originated from a
+  /// `passwordRecovery` event (the user clicked the link in the recovery
+  /// email). The AuthGate listens to this and shows the Reset Password
+  /// screen instead of the normal login flow.
+  final ValueNotifier<bool> isPasswordRecovery = ValueNotifier<bool>(false);
+
   StreamSubscription<AuthState>? _authSubscription;
 
   bool get isConfigured =>
@@ -25,17 +32,54 @@ class SimpleAuthService {
       session?.user.email?.toLowerCase() == _authEmail.toLowerCase();
 
   Future<void> initialize() async {
-    if (!isConfigured) {
+    // Login is gated on having BOTH Supabase configured AND a known
+    // auth email. Password recovery only needs Supabase configured (the
+    // user supplies the email themselves), so we still install the
+    // auth-state listener whenever Supabase is configured even if login
+    // isn't enabled.
+    if (!SupabaseProjectConfig.isConfigured) {
       isLoggedIn.value = false;
+      isPasswordRecovery.value = false;
       return;
     }
 
-    isLoggedIn.value = _isAllowedSession(
-      Supabase.instance.client.auth.currentSession,
-    );
-    _authSubscription ??= Supabase.instance.client.auth.onAuthStateChange.listen(
+    // Inspect any session that is already present at boot (this is how a
+    // Supabase recovery link works on the web: the SDK parses the URL
+    // fragment during `Supabase.initialize` and emits a `passwordRecovery`
+    // event right after, which our listener below will pick up).
+    final initialSession = Supabase.instance.client.auth.currentSession;
+    isLoggedIn.value = _isAllowedSession(initialSession);
+    isPasswordRecovery.value = false;
+
+    // Guard against duplicate listeners.
+    _authSubscription?.cancel();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
       (event) {
-        isLoggedIn.value = _isAllowedSession(event.session);
+        final session = event.session;
+        switch (event.event) {
+          case AuthChangeEvent.passwordRecovery:
+            // Stay on the Reset Password screen until the user successfully
+            // submits a new password (or signs out).
+            isPasswordRecovery.value = session != null;
+            isLoggedIn.value = false;
+            break;
+          case AuthChangeEvent.signedIn:
+          case AuthChangeEvent.tokenRefreshed:
+          case AuthChangeEvent.userUpdated:
+            isPasswordRecovery.value = false;
+            isLoggedIn.value = _isAllowedSession(session);
+            break;
+          case AuthChangeEvent.signedOut:
+            isPasswordRecovery.value = false;
+            isLoggedIn.value = false;
+            break;
+          default:
+            // For any other event, fall back to recomputing the login flag
+            // and leaving the recovery flag untouched. The listener above
+            // explicitly handles the only transitions that can flip the
+            // recovery state.
+            isLoggedIn.value = _isAllowedSession(session);
+        }
       },
     );
   }
@@ -59,16 +103,55 @@ class SimpleAuthService {
     }
   }
 
+  /// Sends a Supabase password-recovery email.
+  ///
+  /// Only requires the Supabase client to be configured (URL + anon key);
+  /// the configured login email is irrelevant here because the user supplies
+  /// the target email address themselves.
+  Future<void> sendRecoveryEmail(String email) async {
+    if (!SupabaseProjectConfig.isConfigured) {
+      throw StateError('Supabase غير مهيأ');
+    }
+    await Supabase.instance.client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: _recoveryRedirectUrl(),
+    );
+  }
+
+  /// Updates the password of the currently signed-in user (the recovery user).
+  ///
+  /// Only requires the Supabase client to be configured and an active
+  /// session — the recovery session is established by the SDK when the
+  /// recovery link is opened.
+  Future<void> updatePassword(String newPassword) async {
+    if (!SupabaseProjectConfig.isConfigured) {
+      throw StateError('Supabase غير مهيأ');
+    }
+    await Supabase.instance.client.auth.updateUser(
+      UserAttributes(password: newPassword),
+    );
+  }
+
   Future<void> logout() async {
-    if (!isConfigured) {
+    if (!SupabaseProjectConfig.isConfigured) {
       isLoggedIn.value = false;
+      isPasswordRecovery.value = false;
       return;
     }
     await Supabase.instance.client.auth.signOut();
+    isPasswordRecovery.value = false;
   }
 
   Future<void> dispose() async {
     await _authSubscription?.cancel();
     _authSubscription = null;
+  }
+
+  /// Returns the redirect URL used in the password-recovery email. For local
+  /// Flutter Web development this defaults to `http://localhost:3000/`.
+  static String _recoveryRedirectUrl() {
+    const configured = String.fromEnvironment('SUPABASE_REDIRECT_URL');
+    if (configured.isNotEmpty) return configured;
+    return 'http://localhost:3000/';
   }
 }

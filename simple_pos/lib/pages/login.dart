@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth/simple_auth_service.dart';
 import '../styles/my_colors.dart';
+import 'forgot_password.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -146,6 +147,22 @@ class _LoginPageState extends State<LoginPage> {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           child: Text(_isSubmitting ? 'جاري الدخول...' : 'دخول'),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: _isSubmitting
+                            ? null
+                            : () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const ForgotPasswordPage(),
+                                  ),
+                                );
+                              },
+                        child: const Text('نسيت كلمة المرور؟'),
                       ),
                     ),
                   ],

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/pages/landing.dart';
 import 'package:simple_pos/pages/login.dart';
+import 'package:simple_pos/pages/reset_password.dart';
 import 'package:simple_pos/services/auth/simple_auth_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:simple_pos/services/local_database/dbFactory.dart';
@@ -49,12 +50,23 @@ class AuthGate extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: SimpleAuthService.instance.isLoggedIn,
       builder: (context, isLoggedIn, _) {
-        if (isLoggedIn) {
-          unawaited(WebRealtimeService.instance.initialize());
-          unawaited(SyncService.instance.triggerSync());
-          return const Landing();
-        }
-        return const LoginPage();
+        // When the user has just clicked the Supabase password-recovery
+        // link, `isPasswordRecovery` is true. Show the Reset Password screen
+        // until they finish the flow (or sign out, which clears the flag).
+        return ValueListenableBuilder<bool>(
+          valueListenable: SimpleAuthService.instance.isPasswordRecovery,
+          builder: (context, isPasswordRecovery, __) {
+            if (isPasswordRecovery) {
+              return const ResetPasswordPage();
+            }
+            if (isLoggedIn) {
+              unawaited(WebRealtimeService.instance.initialize());
+              unawaited(SyncService.instance.triggerSync());
+              return const Landing();
+            }
+            return const LoginPage();
+          },
+        );
       },
     );
   }
