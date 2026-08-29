@@ -83,6 +83,8 @@ class Landing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return BlocListener<ModeCubit, AppMode>(
       listener: (context, mode) {
         final isOnline = mode == AppMode.online;
@@ -118,6 +120,7 @@ class Landing extends StatelessWidget {
                           },
                           imagePath: "assets/icons/price.png",
                           text: "الثمن",
+                          showText: !isMobile,
                         ),
                         MyIconButton(
                           onPressed: () {
@@ -128,6 +131,7 @@ class Landing extends StatelessWidget {
                           },
                           imagePath: "assets/icons/sell.png",
                           text: "بيع",
+                          showText: !isMobile,
                         ),
                         MyIconButton(
                           onPressed: () {
@@ -138,6 +142,7 @@ class Landing extends StatelessWidget {
                           },
                           imagePath: "assets/icons/customers.png",
                           text: "الزبائن",
+                          showText: !isMobile,
                         ),
                       ],
                     ),
@@ -156,11 +161,13 @@ class Landing extends StatelessWidget {
                           },
                           imagePath: "assets/icons/stock.png",
                           text: "المخزن",
+                          showText: !isMobile,
                         ),
                         MyIconButton(
                           onPressed: () => _showPrivateSpaceDialog(context),
                           imagePath: "assets/icons/locked.png",
                           text: "الفضاء الخاص",
+                          showText: !isMobile,
                         ),
                         MyIconButton(
                           onPressed: () {
@@ -171,6 +178,7 @@ class Landing extends StatelessWidget {
                           },
                           imagePath: "assets/icons/history.png",
                           text: "تاريخ المبيعات",
+                          showText: !isMobile,
                         ),
                       ],
                     ),

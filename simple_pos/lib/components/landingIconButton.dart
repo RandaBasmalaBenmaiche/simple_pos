@@ -6,12 +6,14 @@ class MyIconButton extends StatelessWidget {
   final VoidCallback onPressed;
   final String imagePath;
   final String text;
+  final bool showText;
 
   const MyIconButton({
     Key? key,
     required this.onPressed,
     required this.imagePath,
     required this.text,
+    this.showText = true,
   }) : super(key: key);
 
   @override
@@ -36,10 +38,11 @@ class MyIconButton extends StatelessWidget {
             width: 50,
             child: Image.asset(imagePath),
           ),
-          Text(
-            text,
-            style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
-          ),
+          if (showText)
+            Text(
+              text,
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+            ),
         ],
       ),
     );

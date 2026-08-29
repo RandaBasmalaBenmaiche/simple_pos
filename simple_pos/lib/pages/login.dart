@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../services/auth/simple_auth_service.dart';
 import '../styles/my_colors.dart';
+import '../components/mode_switch_toggle.dart';
+import '../services/cubits/mode_cubit.dart';
 import 'forgot_password.dart';
 
 class LoginPage extends StatefulWidget {
@@ -31,7 +34,7 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    if (!SimpleAuthService.instance.isConfigured) {
+    if (!SimpleAuthService.instance.isConfigured && context.read<ModeCubit>().state == AppMode.online) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Supabase غير مهيأ لتسجيل الدخول')),
       );
@@ -45,6 +48,7 @@ class _LoginPageState extends State<LoginPage> {
     final success = await SimpleAuthService.instance.login(
       username: _usernameController.text,
       password: _passwordController.text,
+      mode: context.read<ModeCubit>().state,
     );
 
     if (!mounted) {
@@ -90,6 +94,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const ModeToggle(),
                     Text(
                       'Kiosque Djalil & Ranim',
                       style: TextStyle(

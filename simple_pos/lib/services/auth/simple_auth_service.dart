@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../supabase/supabase_project_config.dart';
+import '../cubits/mode_cubit.dart';
 
 class SimpleAuthService {
   SimpleAuthService._();
@@ -87,8 +88,21 @@ class SimpleAuthService {
   Future<bool> login({
     required String username,
     required String password,
+    AppMode mode = AppMode.online,
   }) async {
-    if (!isConfigured || username.trim() != _username) {
+    if (username.trim() != _username) {
+      return false;
+    }
+
+    if (mode == AppMode.offline) {
+      if (password == 'Kiosque123@') {
+        isLoggedIn.value = true;
+        return true;
+      }
+      return false;
+    }
+
+    if (!isConfigured) {
       return false;
     }
 
