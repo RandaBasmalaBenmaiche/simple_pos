@@ -9,17 +9,19 @@ import 'package:intl/intl.dart';
 
 class CustomPOSAppBar extends StatefulWidget implements PreferredSizeWidget {
   final bool showReturnButton;
+  final bool showTitle;
 
   const CustomPOSAppBar({
     Key? key,
     this.showReturnButton = true,
+    this.showTitle = true,
   }) : super(key: key);
 
   @override
   _CustomPOSAppBarState createState() => _CustomPOSAppBarState();
 
   @override
-  Size get preferredSize => const Size.fromHeight(100);
+  Size get preferredSize => Size.fromHeight(showTitle ? 100 : 60);
 }
 
 class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
@@ -58,20 +60,22 @@ class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
                   onPressed: () => Navigator.pop(context),
                 )
               : null,
-          title: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Text(
-              titleText,
-              style: const TextStyle(
-                fontSize: 60,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
+          title: widget.showTitle
+              ? Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    titleText,
+                    style: const TextStyle(
+                      fontSize: 60,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              : null,
           backgroundColor: MyColors.mainColor(context),
           centerTitle: true,
-          toolbarHeight: 100,
+          toolbarHeight: widget.showTitle ? 100 : 60,
           actions: [
             IconButton(
               icon: const Icon(Icons.logout, color: Colors.white),

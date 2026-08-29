@@ -252,7 +252,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
       });
     }
     return Scaffold(
-      appBar: const CustomPOSAppBar(showReturnButton: true),
+      appBar: const CustomPOSAppBar(showReturnButton: true, showTitle: false),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
