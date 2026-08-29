@@ -330,31 +330,28 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
   Widget _buildProfitAndFilters(DateFormat dateFormatter) {
     return Padding(
       padding: const EdgeInsets.all(10),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildTotals(),
-              _buildDropdownFilters(),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              ElevatedButton(
-                onPressed: _pickStartDate,
-                child: Text(startDate == null ? "اختر تاريخ البداية" : "من: ${dateFormatter.format(startDate!)}"),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: _pickEndDate,
-                child: Text(endDate == null ? "اختر تاريخ النهاية" : "إلى: ${dateFormatter.format(endDate!)}"),
-              ),
-            ],
-          )
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _buildDropdownFilters(),
+            const SizedBox(width: 15),
+            Row(
+              children: [
+                ElevatedButton(
+                  onPressed: _pickStartDate,
+                  child: Text(startDate == null ? "اختر تاريخ البداية" : "من: ${dateFormatter.format(startDate!)}"),
+                ),
+                const SizedBox(width: 5),
+                ElevatedButton(
+                  onPressed: _pickEndDate,
+                  child: Text(endDate == null ? "اختر تاريخ النهاية" : "إلى: ${dateFormatter.format(endDate!)}"),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -451,7 +451,7 @@ class _POSPageState extends State<POSPage> {
               ),
               Flexible(
                 child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.68,
+                  height: MediaQuery.of(context).size.height * 0.80,
                   child: POSItemsTable(
                     items: items,
                     sellItems: () async => await sellItems(currentStoreId),
