@@ -321,7 +321,7 @@ class _POSPageOverviewState extends State<POSPageOverview> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const CustomPOSAppBar(showReturnButton: true),
+      appBar: const CustomPOSAppBar(showReturnButton: true, showTitle: false),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

@@ -313,7 +313,7 @@ class _POSPageState extends State<POSPage> {
   Widget build(BuildContext context) {
     final currentStoreId = context.watch<StoreCubit>().state;
     return Scaffold(
-      appBar: const CustomPOSAppBar(showReturnButton: true),
+      appBar: const CustomPOSAppBar(showReturnButton: true, showTitle: false),
       body: RawKeyboardListener(
         focusNode: keyboardFocusNode,
         onKey: (RawKeyEvent event) {

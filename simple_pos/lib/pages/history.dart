@@ -294,7 +294,7 @@ class _POSPageHistoriqueState extends State<POSPageHistorique> {
     final dateFormatter = DateFormat('yyyy-MM-dd');
 
     return Scaffold(
-      appBar: const CustomPOSAppBar(showReturnButton: true),
+      appBar: const CustomPOSAppBar(showReturnButton: true, showTitle: false),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(

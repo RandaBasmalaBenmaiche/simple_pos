@@ -69,7 +69,7 @@ class _InvoicePreviewPageState extends State<InvoicePreviewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const CustomPOSAppBar(showReturnButton: true),
+      appBar: const CustomPOSAppBar(showReturnButton: true, showTitle: false),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : invoice == null

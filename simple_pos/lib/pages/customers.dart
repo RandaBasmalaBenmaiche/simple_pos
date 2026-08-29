@@ -184,7 +184,7 @@ Future<void> importCustomersFromCSV(int storeId) async {
     final store = context.watch<StoreCubit>().state;
 
     return Scaffold(
-      appBar: const CustomPOSAppBar(showReturnButton: true),
+      appBar: const CustomPOSAppBar(showReturnButton: true, showTitle: false),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
