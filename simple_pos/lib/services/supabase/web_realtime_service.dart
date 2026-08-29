@@ -64,4 +64,12 @@ class WebRealtimeService {
     _channels.clear();
     _initialized = false;
   }
+
+  Future<void> setOnline(bool online) async {
+    if (online) {
+      await initialize();
+    } else {
+      await dispose();
+    }
+  }
 }

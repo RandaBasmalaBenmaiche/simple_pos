@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
+import 'package:simple_pos/services/cubits/mode_cubit.dart';
 import 'package:simple_pos/pages/landing.dart';
 import 'package:simple_pos/pages/login.dart';
 import 'package:simple_pos/pages/reset_password.dart';
@@ -22,8 +23,11 @@ void main() async {
   await SyncService.instance.initialize();
 
   runApp(
-    BlocProvider(
-      create: (_) => StoreCubit(),
+    MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => StoreCubit()),
+        BlocProvider(create: (_) => ModeCubit()),
+      ],
       child: const MainApp(),
     ),
   );

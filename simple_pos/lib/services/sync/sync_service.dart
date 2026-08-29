@@ -355,4 +355,12 @@ class SyncService with WidgetsBindingObserver {
       _initialized = false;
     }
   }
+
+  Future<void> setOnline(bool online) async {
+    if (online) {
+      await initialize();
+    } else {
+      await dispose();
+    }
+  }
 }

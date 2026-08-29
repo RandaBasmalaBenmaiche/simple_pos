@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/components/storeSwitchToggle.dart';
+import 'package:simple_pos/components/mode_switch_toggle.dart';
+import 'package:simple_pos/services/cubits/mode_cubit.dart';
+import 'package:simple_pos/services/sync/sync_service.dart';
+import 'package:simple_pos/services/supabase/web_realtime_service.dart';
 import 'package:simple_pos/pages/customers.dart';
 import 'package:simple_pos/pages/history.dart';
 import 'package:simple_pos/pages/overview.dart';
@@ -78,14 +83,21 @@ class Landing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const CustomPOSAppBar(showReturnButton: false),
+    return BlocListener<ModeCubit, AppMode>(
+      listener: (context, mode) {
+        final isOnline = mode == AppMode.online;
+        SyncService.instance.setOnline(isOnline);
+        WebRealtimeService.instance.setOnline(isOnline);
+      },
+      child: Scaffold(
+        appBar: const CustomPOSAppBar(showReturnButton: false),
       body: SizedBox(
         width: double.infinity,
         height: double.infinity,
         child: Column(
           children: [
             const StoreToggle(),
+            const ModeToggle(),
             Flexible(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -169,6 +181,7 @@ class Landing extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
