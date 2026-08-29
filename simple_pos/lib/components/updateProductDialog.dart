@@ -13,7 +13,6 @@ Future<void> showEditProductDialog(
   final TextEditingController newCodeController = TextEditingController(); // new code
   final TextEditingController nameController = TextEditingController();
   final TextEditingController priceController = TextEditingController();
-  final TextEditingController buyingPriceController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
 
   final int storeId = BlocProvider.of<StoreCubit>(context, listen: false).state;
@@ -27,7 +26,6 @@ Future<void> showEditProductDialog(
   final FocusNode newCodeFocus = FocusNode();
   final FocusNode nameFocus = FocusNode();
   final FocusNode priceFocus = FocusNode();
-  final FocusNode buyingPriceFocus = FocusNode();
   final FocusNode quantityFocus = FocusNode();
 
   void cleanup() {
@@ -36,12 +34,10 @@ Future<void> showEditProductDialog(
     newCodeController.dispose();
     nameController.dispose();
     priceController.dispose();
-    buyingPriceController.dispose();
     quantityController.dispose();
     newCodeFocus.dispose();
     nameFocus.dispose();
     priceFocus.dispose();
-    buyingPriceFocus.dispose();
     quantityFocus.dispose();
   }
 
@@ -65,7 +61,6 @@ Future<void> showEditProductDialog(
                 newCodeController.text = product?['productCodeBar'] ?? '';
                 nameController.text = product?['productName'] ?? '';
                 priceController.text = product?['productPrice'] ?? '';
-                buyingPriceController.text = product?['productBuyingPrice'] ?? '';
                 quantityController.text = product?['productQuantity'] ?? '';
                 isLoaded = true;
                 isEditable = false;
@@ -80,7 +75,6 @@ Future<void> showEditProductDialog(
           Future<void> submitUpdate() async {
             if (nameController.text.isEmpty ||
                 priceController.text.isEmpty ||
-                buyingPriceController.text.isEmpty ||
                 quantityController.text.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("الرجاء تعبئة جميع الحقول")));
@@ -95,7 +89,6 @@ Future<void> showEditProductDialog(
                 newCodeBar: newCodeController.text,
                 newName: nameController.text,
                 newPrice: priceController.text,
-                newBuyingPrice: buyingPriceController.text,
                 newQuantity: quantityController.text,
                 storeId: storeId,
               );
@@ -105,7 +98,6 @@ Future<void> showEditProductDialog(
                 newCodeBar: newCodeController.text,
                 newName: nameController.text,
                 newPrice: priceController.text,
-                newBuyingPrice: buyingPriceController.text,
                 newQuantity: quantityController.text,
                 storeId: storeId,
               );
@@ -117,7 +109,6 @@ Future<void> showEditProductDialog(
                 newCodeBar: newCodeController.text,
                 newName: nameController.text,
                 newPrice: priceController.text,
-                newBuyingPrice: buyingPriceController.text,
                 newQuantity: quantityController.text,
               );
             }
@@ -184,15 +175,6 @@ Future<void> showEditProductDialog(
                         numbersOnly: true,
                         context: context,
                         focusNode: priceFocus,
-                        onSubmitted: (_) =>
-                            FocusScope.of(context).requestFocus(buyingPriceFocus)),
-                    const SizedBox(height: 10),
-                    _buildTextField(
-                        label: "سعر الشراء",
-                        controller: buyingPriceController,
-                        numbersOnly: true,
-                        context: context,
-                        focusNode: buyingPriceFocus,
                         onSubmitted: (_) =>
                             FocusScope.of(context).requestFocus(quantityFocus)),
                     const SizedBox(height: 10),
