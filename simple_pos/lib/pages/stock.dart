@@ -284,14 +284,14 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                   CustomActionButton(
                     text: "اضافة للسلع",
                     onPressed: () {
-                      showAddProductDialog(context, (String name, String price, String quantity, String code) async {
+                      showAddProductDialog(context, (String name, String price, String buyingPrice, String quantity, String code) async {
                         await _stockTable.insertRecord(<String, dynamic>{
                           "productName": name,
                           "store_id": store,
                           "productPrice": price.isNotEmpty ? price : null,
+                          "productBuyingPrice": buyingPrice.isNotEmpty ? buyingPrice : null,
                           "productQuantity": quantity.isNotEmpty ? quantity : null,
                           "productCodeBar": code.isNotEmpty ? code : null,
-                          "productBuyingPrice": '0',
                         });
                         await _loadItems(store);
                       });

@@ -10,18 +10,21 @@ Future<void> showAddProductDialog(
   void Function(
     String name,
     String price,
+    String buyingPrice,
     String quantity,
     String code,
   ) onAdd,
 ) {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController priceController = TextEditingController();
+  final TextEditingController buyingPriceController = TextEditingController();
   final TextEditingController quantityController = TextEditingController();
   final TextEditingController codeController = TextEditingController();
   final storeId = context.read<StoreCubit>().state;
   // Focus nodes for moving between fields
   final FocusNode nameFocus = FocusNode();
   final FocusNode priceFocus = FocusNode();
+  final FocusNode buyingPriceFocus = FocusNode();
   final FocusNode quantityFocus = FocusNode();
   final FocusNode codeFocus = FocusNode();
 
@@ -56,6 +59,7 @@ Future<void> showAddProductDialog(
 
     // Use defaults for optional fields
     final price = priceController.text.isEmpty ? '0' : priceController.text;
+    final buyingPrice = buyingPriceController.text.isEmpty ? '0' : buyingPriceController.text;
     final quantity = quantityController.text.isEmpty ? '1' : quantityController.text;
     final code = codeController.text.isEmpty ? '' : codeController.text;
 
@@ -63,6 +67,7 @@ Future<void> showAddProductDialog(
     onAdd(
       nameController.text,
       price,
+      buyingPrice,
       quantity,
       code,
     );
@@ -102,6 +107,16 @@ Future<void> showAddProductDialog(
                     label: "ثمن البيع (اختياري)",
                     controller: priceController,
                     focusNode: priceFocus,
+                    nextFocus: buyingPriceFocus,
+                    keyboardType: TextInputType.number,
+                    numbersOnly: true,
+                    context: context,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildTextField(
+                    label: "ثمن الشراء (اختياري)",
+                    controller: buyingPriceController,
+                    focusNode: buyingPriceFocus,
                     nextFocus: quantityFocus,
                     keyboardType: TextInputType.number,
                     numbersOnly: true,
