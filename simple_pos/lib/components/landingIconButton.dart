@@ -22,26 +22,24 @@ class MyIconButton extends StatelessWidget {
       onPressed: onPressed,
       style: ButtonStyle(
         backgroundColor: MaterialStateProperty.all(MyColors.secondColor(context)),
-        fixedSize: MaterialStateProperty.all(
-          Size(
-            MediaQuery.of(context).size.width * 0.25,
-            MediaQuery.of(context).size.height * 0.25,
-          ),
-        ),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
-            height: 50,
-            width: 50,
+            height: 60,
+            width: 60,
             child: Image.asset(imagePath),
           ),
           if (showText)
-            Text(
-              text,
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
             ),
         ],
       ),

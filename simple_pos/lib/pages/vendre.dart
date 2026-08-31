@@ -1,6 +1,6 @@
-/**
- * maybe start using the loaded items instead of database calls?
- */
+library vendre;
+
+/// redesigned POS page with responsive layout for mobile and desktop.
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +12,7 @@ import 'package:simple_pos/components/alphaNumericInputField.dart';
 import 'package:simple_pos/components/paying.dart';
 import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/components/sellTable.dart';
+import 'package:simple_pos/components/cart_item_card.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
@@ -22,7 +23,7 @@ import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class POSPage extends StatefulWidget {
-  const POSPage({Key? key}) : super(key: key);
+  const POSPage({super.key});
 
   @override
   _POSPageState createState() => _POSPageState();
@@ -57,9 +58,9 @@ class _POSPageState extends State<POSPage> {
     bool isName = false;
     String codeInput = codeController.text.trim();
     String nameInput = nameController.text.trim();
-    int quantity = int.tryParse(quantityController.text) ?? 0;
+    int quantityValue = int.tryParse(quantityController.text) ?? 0;
 
-    if ((codeInput.isEmpty && nameInput.isEmpty) || quantity <= 0) {
+    if ((codeInput.isEmpty && nameInput.isEmpty) || quantityValue <= 0) {
       return;
     }
 
@@ -99,13 +100,13 @@ class _POSPageState extends State<POSPage> {
     final availableStock = int.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
 
     // Check if requested quantity exceeds available stock
-    if (quantity > availableStock) {
+    if (quantityValue > availableStock) {
       if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text("خطأ"),
-          content: Text("الكمية المطلوبة ($quantity) تفوق الكمية المتوفرة ($availableStock)"),
+          content: Text("الكمية المطلوبة ($quantityValue) تفوق الكمية المتوفرة ($availableStock)"),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -129,7 +130,7 @@ class _POSPageState extends State<POSPage> {
 
     if (existIndex != -1) {
       final currentQty = int.tryParse(items[existIndex]['productQuantity']?.toString() ?? '0') ?? 0;
-      final newQty = currentQty + quantity;
+      final newQty = currentQty + quantityValue;
       // Check if combined quantity exceeds stock
       if (newQty > availableStock) {
         if (!mounted) return;
@@ -162,13 +163,13 @@ class _POSPageState extends State<POSPage> {
     }
 
     // Add new item
-    double itemTotal = price * quantity;
+    double itemTotal = price * quantityValue;
     Map<String, dynamic> item = {
       "productCodeBar": codeBar,
       "productName": name,
       "productPrice": price.toStringAsFixed(2),
       "productBuyingPrice": buyingPrice.toStringAsFixed(2),
-      "productQuantity": quantity.toString(),
+      "productQuantity": quantityValue.toString(),
       "total": itemTotal.toStringAsFixed(2),
     };
     if (!mounted) return;
@@ -312,29 +313,30 @@ class _POSPageState extends State<POSPage> {
   @override
   Widget build(BuildContext context) {
     final currentStoreId = context.watch<StoreCubit>().state;
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return Scaffold(
       appBar: const CustomPOSAppBar(showReturnButton: true, showTitle: false),
-      body: RawKeyboardListener(
+      body: KeyboardListener(
         focusNode: keyboardFocusNode,
-        onKey: (RawKeyEvent event) {
-          if (event is RawKeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.enter) {
+        onKeyEvent: (KeyEvent event) {
+          if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
             if (autoMode) {
               addItem(currentStoreId);
               keyboardFocusNode.unfocus();
               if (lastFcous == 0) {
                 Future.delayed(const Duration(milliseconds: 50), () {
-                  FocusScope.of(context).requestFocus(codeFocusNode);
+                  if (mounted) FocusScope.of(context).requestFocus(codeFocusNode);
                 });
               } else if (lastFcous == 1) {
                 Future.delayed(const Duration(milliseconds: 50), () {
-                  FocusScope.of(context).requestFocus(nameFocusNode);
+                  if (mounted) FocusScope.of(context).requestFocus(nameFocusNode);
                 });
               }
             } else {
               if (quantity) {
                 Future.delayed(const Duration(milliseconds: 50), () {
-                  FocusScope.of(context).requestFocus(quantityFocusNode);
+                  if (mounted) FocusScope.of(context).requestFocus(quantityFocusNode);
                 });
                 quantity = !quantity;
               } else {
@@ -342,11 +344,11 @@ class _POSPageState extends State<POSPage> {
                 keyboardFocusNode.unfocus();
                 if (lastFcous == 0) {
                   Future.delayed(const Duration(milliseconds: 50), () {
-                    FocusScope.of(context).requestFocus(codeFocusNode);
+                    if (mounted) FocusScope.of(context).requestFocus(codeFocusNode);
                   });
                 } else if (lastFcous == 1) {
                   Future.delayed(const Duration(milliseconds: 50), () {
-                    FocusScope.of(context).requestFocus(nameFocusNode);
+                    if (mounted) FocusScope.of(context).requestFocus(nameFocusNode);
                   });
                 }
                 quantity = !quantity;
@@ -354,218 +356,389 @@ class _POSPageState extends State<POSPage> {
             }
           }
         },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+        child: isMobile ? _buildMobileLayout(context, currentStoreId) : _buildDesktopLayout(context, currentStoreId),
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context, int storeId) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: MyColors.secondColor(context).withValues(alpha: 0.1),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+          ),
           child: Column(
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      children: [
-                        Text("وضع يدوي",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: MyColors.mainColor(context))),
-                        Switch(
-                          value: autoMode,
-                          onChanged: (value) {
-                            autoMode = !autoMode;
-                            setState(() {});
-                          },
-                        ),
-                        Text("وضع تلقائي",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: MyColors.mainColor(context))),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      children: [
-                        Text("الاسم",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: MyColors.mainColor(context))),
-                        Switch(
-                          value: (lastFcous == 0) ? true : false,
-                          onChanged: (value) {
-                            lastFcous = (lastFcous == 0) ? 1 : 0;
-                            setState(() {});
-                          },
-                        ),
-                        Text("الكود",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: MyColors.mainColor(context))),
-                      ],
-                    ),
-                  ),
+                  _buildModeSwitch("وضع يدوي", "وضع تلقائي", autoMode, (val) {
+                    setState(() => autoMode = val);
+                  }),
+                  _buildModeSwitch("الاسم", "الكود", lastFcous == 0, (val) {
+                    setState(() => lastFcous = val ? 0 : 1);
+                  }),
                 ],
               ),
+              const SizedBox(height: 16),
               Row(
                 children: [
-                  NumericInputField(
-                    controller: quantityController,
-                    label: "الكمية",
-                    defaultValue: "1",
-                    focusNode: quantityFocusNode,
-                  ),
-                  const SizedBox(width: 16),
-                  AutoCompleteInputField(
-                    controller: nameController,
-                    label: "المنتج",
-                    isAlphanumeric: true,
-                    suggestions: allItems,
-                    focusNode: nameFocusNode,
-                  ),
-                  const SizedBox(width: 16),
                   Expanded(
-                    flex: 2,
-                    child: ClientSelector(
-                      storeId: currentStoreId,
-                      onClientSelected: (client) {
-                        setState(() {
-                          _selectedClient = client;
-                        });
-                      },
-                      initialClient: _selectedClient,
+                    flex: 1,
+                    child: NumericInputField(
+                      controller: quantityController,
+                      label: "الكمية",
+                      defaultValue: "1",
+                      focusNode: quantityFocusNode,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  NumericInputField(
-                    controller: codeController,
-                    label: "الكود",
-                    isAlphanumeric: false,
-                    focusNode: codeFocusNode,
-                  ),
-                  const SizedBox(width: 16),
-                  CustomActionButton(
-                    text: "اضافة للمشتريات",
-                    onPressed: () => addItem(currentStoreId),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: AutoCompleteInputField(
+                      controller: nameController,
+                      label: "المنتج",
+                      isAlphanumeric: true,
+                      suggestions: allItems,
+                      focusNode: nameFocusNode,
+                    ),
                   ),
                 ],
               ),
-              Flexible(
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.85,
-                  child: POSItemsTable(
-                    items: items,
-                    sellItems: () async => await sellItems(currentStoreId),
-                    onQuantityChanged: (index, newQuantity) {
-                      setState(() {
-                        items[index]["productQuantity"] = newQuantity;
-                        items[index]["total"] = ((int.tryParse(items[index]['productQuantity'] ?? '0') ?? 0) *
-                                (double.tryParse(items[index]['productPrice'] ?? '0') ?? 0))
-                            .toStringAsFixed(2);
-                        _updateTotal();
-                      });
-                    },
-                    onDelete: (index) {
-                      setState(() {
-                        items.removeAt(index);
-                        _updateTotal();
-                      });
-                    },
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: NumericInputField(
+                      controller: codeController,
+                      label: "الكود",
+                      isAlphanumeric: false,
+                      focusNode: codeFocusNode,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: MyColors.mainColor(context),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    ),
+                    onPressed: () => addItem(storeId),
+                    child: const Text("إضافة", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.15,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: MyColors.secondColor(context),
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Text(
-                        " المبلغ الكلي:    دج${DisplayFormatters.price(total)}",
-                        style: const TextStyle(
-                          fontSize: 35,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        CustomActionButton(
-                          text: " بيع مجزئ",
-                          onPressed: () async {
-                            if (_selectedClient == null) {
-                              showDialog(
-                                  context: context,
-                                  builder: (BuildContext context) {
-                                    return AlertDialog(
-                                      title: const Text("خطأ"),
-                                      content: const Text(
-                                          "يجب اختيار زبون من اجل هذه الخدمة"),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(context).pop(),
-                                          child: const Text("حسناً"),
-                                        ),
-                                      ],
-                                    );
-                                  });
-                            } else {
-                              showPayingAmountDialog(
-                                  context, payingController, (amount) async {
-                                if (amount > total) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("المبلغ المدفوع أكبر من مجموع الفاتورة"),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                final invoiceId = await _commitSale(
-                                  store: currentStoreId,
-                                  paidAmount: amount,
-                                );
-                                if (mounted && invoiceId != null) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) =>
-                                            InvoicePreviewPage(invoiceId: invoiceId)),
-                                  );
-                                }
-                              });
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 10),
-                        CustomActionButton(
-                          text: "بيع",
-                          onPressed: () async {
-                            final invoiceId = await _commitSale(store: currentStoreId);
-                            if (mounted && invoiceId != null) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) =>
-                                        InvoicePreviewPage(invoiceId: invoiceId)),
-                              );
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 12),
+              ClientSelector(
+                storeId: storeId,
+                onClientSelected: (client) => setState(() => _selectedClient = client),
+                initialClient: _selectedClient,
               ),
             ],
           ),
         ),
+        Expanded(
+          child: items.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text("السلة فارغة", style: TextStyle(fontSize: 18, color: Colors.grey[600])),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    return CartItemCard(
+                      item: items[index],
+                      onQuantityChanged: (newQty) {
+                        setState(() {
+                          items[index]["productQuantity"] = newQty;
+                          items[index]["total"] = ((newQty * (double.tryParse(items[index]['productPrice'] ?? '0') ?? 0.0)).toStringAsFixed(2));
+                          _updateTotal();
+                        });
+                      },
+                      onDelete: () {
+                        setState(() {
+                          items.removeAt(index);
+                          _updateTotal();
+                        });
+                      },
+                    );
+                  },
+                ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "المبلغ الكلي: ${DisplayFormatters.price(total)} دج",
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: MyColors.mainColor(context)),
+                    ),
+                    const Icon(Icons.calculate, color: Colors.grey),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(color: MyColors.mainColor(context)),
+                        ),
+                        onPressed: () => _handlePartialSell(context, storeId),
+                        child: Text("بيع مجزئ", style: TextStyle(color: MyColors.mainColor(context), fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: MyColors.mainColor(context),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        onPressed: () => _handleFullSell(context, storeId),
+                        child: const Text("بيع", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context, int storeId) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              children: [
+                _buildDesktopInputs(context, storeId),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: POSItemsTable(
+                        items: items,
+                        sellItems: () async => await sellItems(storeId),
+                        onQuantityChanged: (index, newQuantity) {
+                          setState(() {
+                            items[index]["productQuantity"] = newQuantity;
+                            items[index]["total"] = ((int.tryParse(items[index]['productQuantity'] ?? '0') ?? 0) *
+                                (double.tryParse(items[index]['productPrice'] ?? '0') ?? 0))
+                                .toStringAsFixed(2);
+                            _updateTotal();
+                          });
+                        },
+                        onDelete: (index) {
+                          setState(() {
+                            items.removeAt(index);
+                            _updateTotal();
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            flex: 1,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: MyColors.secondColor(context),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    "إتمام العملية",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  const SizedBox(height: 30),
+                  ClientSelector(
+                    storeId: storeId,
+                    onClientSelected: (client) => setState(() => _selectedClient = client),
+                    initialClient: _selectedClient,
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text("المجموع الكلي", style: TextStyle(color: Colors.white70, fontSize: 16)),
+                        const SizedBox(height: 8),
+                        Text(
+                          "${DisplayFormatters.price(total)} دج",
+                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  CustomActionButton(
+                    text: "بيع مجزئ",
+                    onPressed: () => _handlePartialSell(context, storeId),
+                  ),
+                  const SizedBox(height: 12),
+                  CustomActionButton(
+                    text: "تأكيد البيع",
+                    onPressed: () => _handleFullSell(context, storeId),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildDesktopInputs(BuildContext context, int storeId) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildModeSwitch("وضع يدوي", "وضع تلقائي", autoMode, (val) {
+                setState(() => autoMode = val);
+              }),
+              _buildModeSwitch("الاسم", "الكود", lastFcous == 0, (val) {
+                setState(() => lastFcous = val ? 0 : 1);
+              }),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              NumericInputField(
+                controller: quantityController,
+                label: "الكمية",
+                defaultValue: "1",
+                focusNode: quantityFocusNode,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: AutoCompleteInputField(
+                  controller: nameController,
+                  label: "المنتج",
+                  isAlphanumeric: true,
+                  suggestions: allItems,
+                  focusNode: nameFocusNode,
+                ),
+              ),
+              const SizedBox(width: 16),
+              NumericInputField(
+                controller: codeController,
+                label: "الكود",
+                isAlphanumeric: false,
+                focusNode: codeFocusNode,
+              ),
+              const SizedBox(width: 16),
+              CustomActionButton(
+                text: "إضافة",
+                onPressed: () => addItem(storeId),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeSwitch(String left, String right, bool value, ValueChanged<bool> onChanged) {
+    return Row(
+      children: [
+        Text(left, style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context))),
+        Switch(value: value, onChanged: onChanged),
+        Text(right, style: TextStyle(fontWeight: FontWeight.bold, color: MyColors.mainColor(context))),
+      ],
+    );
+  }
+
+  Future<void> _handlePartialSell(BuildContext context, int storeId) async {
+    if (_selectedClient == null) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text("خطأ"),
+            content: const Text("يجب اختيار زبون من اجل هذه الخدمة"),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text("حسناً")),
+            ],
+          );
+        },
+      );
+      return;
+    }
+    showPayingAmountDialog(context, payingController, (amount) async {
+      if (amount > total) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("المبلغ المدفوع أكبر من مجموع الفاتورة")),
+        );
+        return;
+      }
+      final invoiceId = await _commitSale(store: storeId, paidAmount: amount);
+      if (context.mounted && invoiceId != null) {
+        Navigator.push(context, MaterialPageRoute(builder: (context) => InvoicePreviewPage(invoiceId: invoiceId)));
+      }
+    });
+  }
+
+  Future<void> _handleFullSell(BuildContext context, int storeId) async {
+    final invoiceId = await _commitSale(store: storeId);
+    if (context.mounted && invoiceId != null) {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => InvoicePreviewPage(invoiceId: invoiceId)));
+    }
   }
 }
