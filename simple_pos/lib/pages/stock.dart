@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
@@ -19,9 +20,14 @@ import 'package:simple_pos/services/utils/sort_utils.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:simple_pos/main.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:arabic_reshaper/arabic_reshaper.dart';
+import 'package:bidi/bidi.dart' as bidi_lib;
 
 class POSPageStock extends StatefulWidget {
-  const POSPageStock({Key? key}) : super(key: key);
+  const POSPageStock({super.key});
 
   @override
   _POSPageState createState() => _POSPageState();
@@ -31,6 +37,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
   List<Map<String, dynamic>> items = [];
   List<Map<String, dynamic>> allItems = [];
   TextEditingController searchController = TextEditingController();
+  TextEditingController applyAllController = TextEditingController();
   StreamSubscription<Set<String>>? _realtimeSub;
   late final DStockTable _stockTable;
   late int _currentStoreId;
@@ -167,6 +174,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
       }
 
       await _loadItems(store);
+      if (!mounted) return;
       if (added == 0 && updated == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('لم يتم العثور على منتجات في الملف')),
@@ -220,13 +228,24 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
 
     if (outputFile != null) {
       await writeTextFile(outputFile, csv);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تم تصدير المنتجات إلى $outputFile')),
       );
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم إلغاء التصدير')),
       );
+    }
+  }
+
+  String _fixArabic(String text) {
+    try {
+      final reshaped = ArabicReshaper().reshape(text);
+      return String.fromCharCodes(bidi_lib.logicalToVisual(reshaped));
+    } catch (e) {
+      return text;
     }
   }
 
@@ -386,6 +405,27 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                               newQuantity.isNotEmpty ? newQuantity : null,
                           storeId: store,
                         );
+                  if (!success && mounted) {
+                    await _loadItems(store);
+                  }
+                },
+                onMinStockChanged: (index, newMinStock) async {
+                  final product = items[index];
+                  final productId = product['id'] as int?;
+
+                  setState(() {
+                    items[index]["min_stock"] = newMinStock;
+                    final allIndex = allItems.indexWhere((e) => e['id'] == productId);
+                    if (allIndex != -1) allItems[allIndex]["min_stock"] = newMinStock;
+                  });
+
+                  final success = productId != null
+                      ? await _stockTable.updateProductById(
+                          id: productId,
+                          newMinStock: newMinStock,
+                        )
+                      : false; // MinStock update by ID is preferred
+
                   if (!success && mounted) {
                     await _loadItems(store);
                   }

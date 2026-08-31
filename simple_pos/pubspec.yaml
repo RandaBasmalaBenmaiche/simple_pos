@@ -21,6 +21,8 @@ dependencies:
   intl: ^0.18.1
   pdf: ^3.11.0
   printing: ^5.11.1
+  arabic_reshaper: any
+  bidi: any
   supabase_flutter: ^2.8.0
   uuid: ^4.5.1
   hive: ^2.2.3

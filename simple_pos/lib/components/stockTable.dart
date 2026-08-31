@@ -8,6 +8,7 @@ class POSStockItemsTable extends StatefulWidget {
   final List<Map<String, dynamic>> items;
   final VoidCallback sellItems;
   final Function(int index, String newQuantity) onQuantityChanged;
+  final Function(int index, int newMinStock) onMinStockChanged;
   final Function(int index) onDelete;
 
   const POSStockItemsTable({
@@ -15,6 +16,7 @@ class POSStockItemsTable extends StatefulWidget {
     required this.items,
     required this.sellItems,
     required this.onQuantityChanged,
+    required this.onMinStockChanged,
     required this.onDelete,
   });
 
@@ -53,6 +55,19 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
       focusNode.dispose();
     }
     super.dispose();
+  }
+
+  Color _getCardColor(Map<String, dynamic> item) {
+    final stock = double.tryParse(item['productQuantity']?.toString() ?? '0') ?? 0;
+    final minStock = item['min_stock'] as int? ?? 0;
+
+    if (stock == 0) {
+      return Colors.red[100]!;
+    } else if (stock <= minStock) {
+      return Colors.yellow[100]!;
+    } else {
+      return Colors.green[100]!;
+    }
   }
 
   Future<void> _scrollBy(double delta) async {
@@ -108,8 +123,8 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                 padding: const EdgeInsets.all(12),
                 itemCount: widget.items.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final item = widget.items[index];
+                itemBuilder: (context, index) {
+                  final item = widget.items[index];
                 final itemId = item['id'] as int;
                 final controller = _controllers.putIfAbsent(
                   itemId,
@@ -120,87 +135,152 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                 final focusNode =
                     _focusNodes.putIfAbsent(itemId, () => FocusNode());
 
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          DisplayFormatters.price(item['productPrice']),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                return InkWell(
+                  onTap: () async {
+                    final currentMinStock = item['min_stock'] as int? ?? 0;
+                    final TextEditingController minStockController =
+                        TextEditingController(text: currentMinStock.toString());
+                    final FocusNode minStockFocus = FocusNode();
+
+                    await showDialog(
+                      context: context,
+                      builder: (context) => Dialog(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                item['productName']?.toString() ?? 'منتج',
+                                style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 20),
+                              TextField(
+                                controller: minStockController,
+                                focusNode: minStockFocus,
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.center,
+                                inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly],
+                                decoration: const InputDecoration(
+                                  labelText: "الحد الأدنى للمخزون",
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text("إلغاء"),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      final val = int.tryParse(
+                                          minStockController.text);
+                                      if (val != null) {
+                                        widget.onMinStockChanged(index, val);
+                                        Navigator.pop(context);
+                                      }
+                                    },
+                                    child: const Text("حفظ"),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      Expanded(
-                        flex: 2,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: SizedBox(
-                            width: 68,
-                            height: 42,
-                            child: TextField(
-                              controller: controller,
-                              focusNode: focusNode,
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.center,
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                              onTap: () {
-                                controller.selection = TextSelection(
-                                  baseOffset: 0,
-                                  extentOffset: controller.text.length,
-                                );
-                              },
-                              onChanged: (value) {
-                                final normalized = DisplayFormatters.quantity(value);
-                                if (controller.text != normalized) {
-                                  controller.value = TextEditingValue(
-                                    text: normalized,
-                                    selection: TextSelection.collapsed(
-                                      offset: normalized.length,
-                                    ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: _getCardColor(item),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.black12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            DisplayFormatters.price(item['productPrice']),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: 68,
+                              height: 42,
+                              child: TextField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.center,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                onTap: () {
+                                  controller.selection = TextSelection(
+                                    baseOffset: 0,
+                                    extentOffset: controller.text.length,
                                   );
-                                }
-                                widget.onQuantityChanged(
-                                  index,
-                                  int.parse(normalized).toString(),
-                                );
-                              },
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 8,
+                                },
+                                onChanged: (value) {
+                                  final normalized = DisplayFormatters.quantity(value);
+                                  if (controller.text != normalized) {
+                                    controller.value = TextEditingValue(
+                                      text: normalized,
+                                      selection: TextSelection.collapsed(
+                                        offset: normalized.length,
+                                      ),
+                                    );
+                                  }
+                                  widget.onQuantityChanged(
+                                    index,
+                                    int.parse(normalized).toString(),
+                                  );
+                                },
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 8,
+                                  ),
+                                  border: OutlineInputBorder(),
                                 ),
-                                border: OutlineInputBorder(),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      Expanded(
-                        flex: 4,
-                        child: Text(
-                          item['productName']?.toString() ?? 'بدون اسم',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        Expanded(
+                          flex: 4,
+                          child: Text(
+                            item['productName']?.toString() ?? 'بدون اسم',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          item['productCodeBar']?.toString() ?? 'بدون كود',
-                          style: const TextStyle(fontSize: 16),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            item['productCodeBar']?.toString() ?? 'بدون كود',
+                            style: const TextStyle(fontSize: 16),
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => widget.onDelete(index),
-                      ),
-                    ],
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => widget.onDelete(index),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },

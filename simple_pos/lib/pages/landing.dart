@@ -23,23 +23,7 @@ class Landing extends StatelessWidget {
     final passwordController = TextEditingController();
     final passwordFocusNode = FocusNode();
 
-    Future<void> submit(BuildContext dialogContext) async {
-      if (passwordController.text != _privateSpacePassword) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('كلمة المرور غير صحيحة')),
-        );
-        return;
-      }
-
-      Navigator.of(dialogContext).pop();
-      if (!context.mounted) return;
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const POSPageOverview()),
-      );
-    }
-
-    await showDialog(
+    final bool? isCorrect = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -61,7 +45,15 @@ class Landing extends StatelessWidget {
               hintText: 'كلمة المرور',
               border: OutlineInputBorder(),
             ),
-            onSubmitted: (_) => submit(dialogContext),
+            onSubmitted: (_) {
+              if (passwordController.text == _privateSpacePassword) {
+                Navigator.of(dialogContext).pop(true);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('كلمة المرور غير صحيحة')),
+                );
+              }
+            },
           ),
           actions: [
             TextButton(
@@ -69,7 +61,15 @@ class Landing extends StatelessWidget {
               child: const Text('إلغاء'),
             ),
             ElevatedButton(
-              onPressed: () => submit(dialogContext),
+              onPressed: () {
+                if (passwordController.text == _privateSpacePassword) {
+                  Navigator.of(dialogContext).pop(true);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('كلمة المرور غير صحيحة')),
+                  );
+                }
+              },
               child: const Text('دخول'),
             ),
           ],
@@ -79,6 +79,13 @@ class Landing extends StatelessWidget {
 
     passwordController.dispose();
     passwordFocusNode.dispose();
+
+    if (isCorrect == true && context.mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const POSPageOverview()),
+      );
+    }
   }
 
   @override

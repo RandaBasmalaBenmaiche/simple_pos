@@ -14,6 +14,7 @@ class SupabaseRowMapper {
           'productbuyingprice': normalized['productBuyingPrice'],
           'productcodebar': normalized['productCodeBar'],
           'productquantity': normalized['productQuantity'],
+          'min_stock': normalized['min_stock'],
         }..removeWhere((key, _) => _stockCamelKeys.contains(key));
       case 'invoice_items':
         return {
@@ -45,6 +46,7 @@ class SupabaseRowMapper {
               remote['productCodeBar'] ?? remote['productcodebar'],
           'productQuantity':
               remote['productQuantity'] ?? remote['productquantity'],
+          'min_stock': remote['min_stock'] ?? remote['min_stock'],
         };
       case 'invoice_items':
         return {

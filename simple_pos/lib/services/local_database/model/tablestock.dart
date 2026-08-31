@@ -14,6 +14,7 @@ class DStockTable {
     String? buyingPrice,
     String? codeBar,
     String? quantity,
+    int? minStock,
   }) async {
     try {
       final db = await DBfactory.getDatabase();
@@ -28,11 +29,13 @@ class DStockTable {
           'productBuyingPrice': buyingPrice,
           'productCodeBar': codeBar,
           'productQuantity': quantity,
+          'min_stock': minStock ?? 0,
         }, deviceId: deviceId);
         await DBfactory.stockStore.record(id).put(txn, record);
         await DBfactory.queueUpsert(txn, table: 'stock', record: record);
         return id;
       });
+
       if (id != null) {
         if (useSupabaseWeb) {
           await SyncService.instance.flush();
@@ -161,6 +164,7 @@ class DStockTable {
     String? newPrice,
     String? newBuyingPrice,
     String? newQuantity,
+    int? newMinStock,
   }) async {
     try {
       final db = await DBfactory.getDatabase();
@@ -176,6 +180,7 @@ class DStockTable {
           merged['productBuyingPrice'] = newBuyingPrice;
         }
         if (newQuantity != null) merged['productQuantity'] = newQuantity;
+        if (newMinStock != null) merged['min_stock'] = newMinStock;
 
         final record = DBfactory.withSyncMetadata(
           merged,
@@ -186,6 +191,7 @@ class DStockTable {
         await DBfactory.queueUpsert(txn, table: 'stock', record: record);
         return true;
       });
+
       if (updated) {
         if (useSupabaseWeb) {
           await SyncService.instance.flush();
@@ -300,6 +306,7 @@ class DStockTable {
         buyingPrice: data['productBuyingPrice']?.toString(),
         codeBar: data['productCodeBar']?.toString(),
         quantity: data['productQuantity']?.toString(),
+        minStock: data['min_stock'] as int?,
       );
     } catch (e, stacktrace) {
       print('$e --> $stacktrace');
@@ -326,6 +333,7 @@ class DStockTable {
     final buyingPrice = data['productBuyingPrice']?.toString();
     final codeBar = data['productCodeBar']?.toString();
     final quantity = data['productQuantity']?.toString();
+    final minStock = data['min_stock'] as int?;
 
     try {
       // 1) Try to find an existing product using the same identity rules
@@ -346,6 +354,7 @@ class DStockTable {
           newBuyingPrice:
               (buyingPrice == null || buyingPrice.isEmpty) ? null : buyingPrice,
           newQuantity: (quantity == null || quantity.isEmpty) ? null : quantity,
+          newMinStock: minStock,
         );
         return (id: existing['id'] as int, created: !ok);
       }
@@ -358,6 +367,7 @@ class DStockTable {
         buyingPrice: buyingPrice,
         codeBar: codeBar,
         quantity: quantity,
+        minStock: minStock,
       );
       return (id: newId ?? -1, created: newId != null);
     } catch (e, stacktrace) {
@@ -416,6 +426,7 @@ class DStockTable {
       'productBuyingPrice': raw['productBuyingPrice']?.toString(),
       'productCodeBar': raw['productCodeBar']?.toString(),
       'productQuantity': raw['productQuantity']?.toString(),
+      'min_stock': raw['min_stock'] as int? ?? 0,
     };
   }
 }
