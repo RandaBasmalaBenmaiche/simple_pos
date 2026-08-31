@@ -171,7 +171,8 @@ class _POSPageOverviewState extends State<POSPageOverview> {
   String _fixArabic(String text) {
     try {
       final reshaped = ArabicReshaper().reshape(text);
-      return String.fromCharCodes(bidi_lib.logicalToVisual(reshaped));
+      final visualCodes = bidi_lib.logicalToVisual(reshaped);
+      return String.fromCharCodes(visualCodes);
     } catch (e) {
       return text;
     }
@@ -269,13 +270,13 @@ class _POSPageOverviewState extends State<POSPageOverview> {
       final stock = double.tryParse(stockStr) ?? 0.0;
       final minStock = double.tryParse(minStockStr) ?? 0.0;
 
-      final isLow = selection == 'low';
-      final isOut = selection == 'out';
-      final isYellow = selection == 'yellow';
-
-      if (isOut) return stock <= 0;
-      if (isYellow) return stock > 0 && stock < minStock;
-      if (isLow) return stock < minStock;
+      if (selection == 'out') {
+        return stock <= 0;
+      } else if (selection == 'yellow') {
+        return stock > 0 && stock <= minStock;
+      } else if (selection == 'low') {
+        return stock <= minStock;
+      }
 
       return false;
     }).toList();
@@ -283,7 +284,7 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     if (filtered.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لا توجد منتجات تطابق هذا الشرط')),
+        SnackBar(content: Text('لا توجد منتجات تطابق هذا الشرط ($selection) - العدد: 0')),
       );
       return;
     }
@@ -294,33 +295,31 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     final pdf = pw.Document();
     pdf.addPage(
       pw.MultiPage(
-        textDirection: pw.TextDirection.rtl,
+        textDirection: pw.TextDirection.ltr,
         build: (pw.Context context) {
           return [
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
-              children: [
-                pw.Text(
-                  _fixArabic(selection == 'low' ? options['low']! : (selection == 'out' ? options['out']! : options['yellow']!)),
-                  style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, font: ttf),
-                  textAlign: pw.TextAlign.right,
-                ),
-                pw.SizedBox(height: 20),
-                pw.TableHelper.fromTextArray(
-                  headers: ["المخزون الحالي", "اسم المنتج"],
-                  data: filtered.map((item) {
-                    final product = item as Map<String, dynamic>;
-                    return [
-                      product['productQuantity'] ?? '0',
-                      _fixArabic(product['productName'] ?? ''),
-                    ];
-                  }).toList(),
-                  headerStyle: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold),
-                  cellStyle: pw.TextStyle(font: ttf),
-                  cellAlignment: pw.Alignment.centerRight,
-                  border: pw.TableBorder.all(width: 0.5),
-                ),
+            pw.Text(
+              _fixArabic(selection == 'low' ? options['low']! : (selection == 'out' ? options['out']! : options['yellow']!)),
+              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, font: ttf),
+              textAlign: pw.TextAlign.right,
+            ),
+            pw.SizedBox(height: 20),
+            pw.TableHelper.fromTextArray(
+              headers: [
+                _fixArabic("المخزون الحالي"),
+                _fixArabic("اسم المنتج"),
               ],
+              data: filtered.map((item) {
+                final product = item as Map<String, dynamic>;
+                return [
+                  product['productQuantity']?.toString() ?? '0',
+                  _fixArabic(product['productName']?.toString() ?? ''),
+                ];
+              }).toList(),
+              headerStyle: pw.TextStyle(font: ttf, fontWeight: pw.FontWeight.bold),
+              cellStyle: pw.TextStyle(font: ttf),
+              cellAlignment: pw.Alignment.centerRight,
+              border: pw.TableBorder.all(width: 0.5),
             ),
           ];
         },

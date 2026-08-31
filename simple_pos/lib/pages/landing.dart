@@ -26,18 +26,13 @@ class Landing extends StatelessWidget {
     final bool? isCorrect = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (passwordFocusNode.context != null && passwordFocusNode.hasFocus == false) {
-            passwordFocusNode.requestFocus();
-          }
-        });
-
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           title: const Text('أدخل كلمة مرور الفضاء الخاص', textAlign: TextAlign.center),
           content: TextField(
             controller: passwordController,
             focusNode: passwordFocusNode,
+            autofocus: true,
             obscureText: true,
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
