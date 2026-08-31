@@ -1,4 +1,5 @@
 import 'package:csv/csv.dart';
+import 'package:simple_pos/services/notification_service.dart';
 
 import '../dbFactory.dart';
 import '../../sync/sync_service.dart';
@@ -157,6 +158,103 @@ class DStockTable {
     }
   }
 
+  Future<bool> updateStockAndMinStock({
+    required int id,
+    double? addAmount,
+    int? newMinStock,
+  }) async {
+    try {
+      final db = await DBfactory.getDatabase();
+      final updated = await db.transaction((txn) async {
+        final existing = await DBfactory.stockStore.record(id).get(txn);
+        if (existing == null) return false;
+
+        final merged = Map<String, Object?>.from(existing);
+
+        if (addAmount != null) {
+          final currentQty = double.tryParse(existing['productQuantity']?.toString() ?? '0') ?? 0;
+          merged['productQuantity'] = (currentQty + addAmount).toString();
+        }
+
+        if (newMinStock != null) {
+          merged['min_stock'] = newMinStock;
+        }
+
+        final record = DBfactory.withSyncMetadata(
+          merged,
+          syncId: existing['sync_id']?.toString(),
+          deviceId: existing['device_id']?.toString(),
+        );
+        await DBfactory.stockStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(txn, table: 'stock', record: record);
+        return true;
+      });
+
+      if (updated) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+
+        // Trigger notification check
+        final product = await getProductById(id);
+        if (product != null) {
+          await NotificationService.instance.checkAndCreateNotification(
+            storeId: product['store_id'] as int? ?? 0,
+            productId: id,
+            currentQty: double.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0,
+            minStock: product['min_stock'] as int? ?? 0,
+          );
+        }
+      }
+      return updated;
+    } catch (e, stacktrace) {
+      print('Error updating stock and min stock: $e --> $stacktrace');
+      return false;
+    }
+  }
+
+  Future<bool> addStock({
+    required int id,
+    required double amount,
+  }) async {
+    try {
+      final db = await DBfactory.getDatabase();
+      final updated = await db.transaction((txn) async {
+        final existing = await DBfactory.stockStore.record(id).get(txn);
+        if (existing == null) return false;
+
+        final currentQty = double.tryParse(existing['productQuantity']?.toString() ?? '0') ?? 0;
+        final newQty = currentQty + amount;
+
+        final merged = Map<String, Object?>.from(existing);
+        merged['productQuantity'] = newQty.toString();
+
+        final record = DBfactory.withSyncMetadata(
+          merged,
+          syncId: existing['sync_id']?.toString(),
+          deviceId: existing['device_id']?.toString(),
+        );
+        await DBfactory.stockStore.record(id).put(txn, record);
+        await DBfactory.queueUpsert(txn, table: 'stock', record: record);
+        return true;
+      });
+
+      if (updated) {
+        if (useSupabaseWeb) {
+          await SyncService.instance.flush();
+        } else {
+          SyncService.instance.scheduleSync();
+        }
+      }
+      return updated;
+    } catch (e, stacktrace) {
+      print('Error adding stock: $e --> $stacktrace');
+      return false;
+    }
+  }
+
   Future<bool> updateProductById({
     required int id,
     String? newCodeBar,
@@ -197,6 +295,17 @@ class DStockTable {
           await SyncService.instance.flush();
         } else {
           SyncService.instance.scheduleSync();
+        }
+
+        // Trigger notification check
+        final product = await getProductById(id);
+        if (product != null) {
+          await NotificationService.instance.checkAndCreateNotification(
+            storeId: product['store_id'] as int? ?? 0,
+            productId: id,
+            currentQty: double.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0,
+            minStock: product['min_stock'] as int? ?? 0,
+          );
         }
       }
       return updated;

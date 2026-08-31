@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import 'hive_database.dart';
+export 'hive_database.dart';
 
 class DBfactory {
   static const String databaseName = 'simple_pos.db';
@@ -25,6 +26,8 @@ class DBfactory {
       intMapStoreFactory.store('invoice_items');
   static final StoreRef<int, Map<String, Object?>> productAliasesStore =
       intMapStoreFactory.store('product_aliases');
+  static final StoreRef<int, Map<String, Object?>> notificationsStore =
+      intMapStoreFactory.store('notifications');
   static final StoreRef<int, Map<String, Object?>> syncOutboxStore =
       intMapStoreFactory.store('sync_outbox');
 
@@ -36,6 +39,7 @@ class DBfactory {
         'invoices': invoicesStore,
         'invoice_items': invoiceItemsStore,
         'product_aliases': productAliasesStore,
+        'notifications': notificationsStore,
       };
 
   static Future<HiveDatabase> getDatabase() async {

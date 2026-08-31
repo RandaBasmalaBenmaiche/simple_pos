@@ -19,6 +19,7 @@ class SyncService with WidgetsBindingObserver {
     'invoices',
     'invoice_items',
     'debt_payments',
+    'notifications',
   ];
 
   bool _initialized = false;

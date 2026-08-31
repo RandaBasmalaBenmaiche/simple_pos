@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:simple_pos/components/scrollArrowButtons.dart';
 import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:simple_pos/services/local_database/model/tablestock.dart';
 
 class POSStockItemsTable extends StatefulWidget {
   final List<Map<String, dynamic>> items;
@@ -10,6 +11,7 @@ class POSStockItemsTable extends StatefulWidget {
   final Function(int index, String newQuantity) onQuantityChanged;
   final Function(int index, int newMinStock) onMinStockChanged;
   final Function(int index) onDelete;
+  final VoidCallback onStockUpdated;
 
   const POSStockItemsTable({
     super.key,
@@ -18,6 +20,7 @@ class POSStockItemsTable extends StatefulWidget {
     required this.onQuantityChanged,
     required this.onMinStockChanged,
     required this.onDelete,
+    required this.onStockUpdated,
   });
 
   @override
@@ -137,10 +140,10 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
 
                 return InkWell(
                   onTap: () async {
+                    final currentQty = item['productQuantity']?.toString() ?? '0';
                     final currentMinStock = item['min_stock'] as int? ?? 0;
-                    final TextEditingController minStockController =
-                        TextEditingController(text: currentMinStock.toString());
-                    final FocusNode minStockFocus = FocusNode();
+                    final addStockController = TextEditingController();
+                    final minStockController = TextEditingController(text: currentMinStock.toString());
 
                     await showDialog(
                       context: context,
@@ -160,17 +163,26 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 20),
-                              TextField(
-                                controller: minStockController,
-                                focusNode: minStockFocus,
+                              _buildStockTextField(
+                                label: "الكمية الحالية",
+                                value: currentQty,
+                                readOnly: true,
+                              ),
+                              const SizedBox(height: 10),
+                              _buildStockTextField(
+                                label: "إضافة كمية",
+                                controller: addStockController,
                                 keyboardType: TextInputType.number,
-                                textAlign: TextAlign.center,
                                 inputFormatters: [
                                     FilteringTextInputFormatter.digitsOnly],
-                                decoration: const InputDecoration(
-                                  labelText: "الحد الأدنى للمخزون",
-                                  border: OutlineInputBorder(),
-                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              _buildStockTextField(
+                                label: "الحد الأدنى للمخزون",
+                                controller: minStockController,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly],
                               ),
                               const SizedBox(height: 20),
                               Row(
@@ -181,12 +193,27 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                                     child: const Text("إلغاء"),
                                   ),
                                   ElevatedButton(
-                                    onPressed: () {
-                                      final val = int.tryParse(
+                                    onPressed: () async {
+                                      final addAmount = double.tryParse(
+                                          addStockController.text);
+                                      final minStock = int.tryParse(
                                           minStockController.text);
-                                      if (val != null) {
-                                        widget.onMinStockChanged(index, val);
+
+                                      final productId = item['id'] as int;
+                                      final stockTable = DStockTable();
+                                      final success = await stockTable.updateStockAndMinStock(
+                                        id: productId,
+                                        addAmount: addAmount,
+                                        newMinStock: minStock,
+                                      );
+
+                                      if (success) {
                                         Navigator.pop(context);
+                                        widget.onStockUpdated();
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text("حدث خطأ أثناء التحديث")),
+                                        );
                                       }
                                     },
                                     child: const Text("حفظ"),
@@ -286,7 +313,27 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
               },
             ),
           ),
-      )],
+      ),],
+      ),
+    );
+  }
+
+  Widget _buildStockTextField({
+    required String label,
+    TextEditingController? controller,
+    String? value,
+    bool readOnly = false,
+    TextInputType keyboardType = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    return TextField(
+      controller: controller ?? (value != null ? TextEditingController(text: value) : null),
+      readOnly: readOnly,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
       ),
     );
   }

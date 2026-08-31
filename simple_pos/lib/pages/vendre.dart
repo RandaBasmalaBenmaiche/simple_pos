@@ -13,6 +13,7 @@ import 'package:simple_pos/components/paying.dart';
 import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/components/sellTable.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
+import 'package:simple_pos/services/cubits/notification_cubit.dart';
 import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/services/supabase/web_realtime_service.dart';
@@ -211,6 +212,10 @@ class _POSPageState extends State<POSPage> {
         customer: _selectedClient,
         paidAmount: paidAmount,
       );
+
+      if (mounted) {
+        context.read<NotificationCubit>().refreshNotifications(store);
+      }
 
       if (!mounted) {
         return result.invoiceId;

@@ -1,6 +1,7 @@
 import '../local_database/dbFactory.dart';
 import '../local_database/hive_database.dart';
 import '../sync/sync_service.dart';
+import '../notification_service.dart';
 
 class LocalSaleException implements Exception {
   LocalSaleException(this.message);
@@ -176,6 +177,17 @@ class LocalSaleService {
           txn,
           table: 'stock',
           record: updatedProduct,
+        );
+      }
+
+      // Trigger notifications for all updated products
+      for (final updatedProduct in productUpdates) {
+        final productId = updatedProduct['id'] as int;
+        await NotificationService.instance.checkAndCreateNotification(
+          storeId: storeId,
+          productId: productId,
+          currentQty: double.tryParse(updatedProduct['productQuantity']?.toString() ?? '0') ?? 0,
+          minStock: updatedProduct['min_stock'] as int? ?? 0,
         );
       }
 

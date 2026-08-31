@@ -11,6 +11,7 @@ import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/components/stockTable.dart';
 import 'package:simple_pos/components/updateProductDialog.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
+import 'package:simple_pos/services/cubits/notification_cubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/services/platform/download_text.dart';
 import 'package:simple_pos/services/platform/file_text.dart';
@@ -98,6 +99,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
         allItems = loadedItems;
         items = sortProducts(allItems, _sortMode, order: _sortOrder);
       });
+      context.read<NotificationCubit>().refreshNotifications(store);
     }
   }
 
@@ -407,6 +409,8 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                         );
                   if (!success && mounted) {
                     await _loadItems(store);
+                  } else if (mounted) {
+                    await _loadItems(store);
                   }
                 },
                 onMinStockChanged: (index, newMinStock) async {
@@ -427,6 +431,8 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                       : false; // MinStock update by ID is preferred
 
                   if (!success && mounted) {
+                    await _loadItems(store);
+                  } else if (mounted) {
                     await _loadItems(store);
                   }
                 },
@@ -474,8 +480,11 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                       }
                     }
                 },
+                onStockUpdated: () async {
+                  await _loadItems(store);
+                },
               ),
-            ),
+              ),
           ],
         ),
       ),
