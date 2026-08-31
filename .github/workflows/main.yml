@@ -27,6 +27,8 @@ jobs:
           --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
           --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
           --dart-define=SUPABASE_AUTH_EMAIL=${{ secrets.SUPABASE_AUTH_EMAIL }}
+          --dart-define=SUPABASE_AUTH_USERNAME=${{ secrets.SUPABASE_AUTH_USERNAME }}
+          --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
         working-directory: simple_pos
 
       - uses: peaceiris/actions-gh-pages@v3
