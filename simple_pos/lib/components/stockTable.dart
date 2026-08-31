@@ -30,6 +30,17 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
   @override
   void didUpdateWidget(covariant POSStockItemsTable oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    for (var item in widget.items) {
+      final itemId = item['id'] as int;
+      final controller = _controllers[itemId];
+      if (controller != null) {
+        final currentVal = DisplayFormatters.quantity(item['productQuantity']);
+        if (controller.text != currentVal) {
+          controller.text = currentVal;
+        }
+      }
+    }
   }
 
   @override

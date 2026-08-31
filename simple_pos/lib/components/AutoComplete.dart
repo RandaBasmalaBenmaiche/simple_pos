@@ -10,6 +10,7 @@ class AutoCompleteInputField extends StatefulWidget {
   final String? defaultValue;
   final FocusNode? focusNode;
   final List<String> suggestions;
+  final bool enabled;
 
   const AutoCompleteInputField({
     super.key,
@@ -20,6 +21,7 @@ class AutoCompleteInputField extends StatefulWidget {
     this.defaultValue,
     this.focusNode,
     required this.suggestions,
+    this.enabled = true,
   });
 
   @override
@@ -147,6 +149,7 @@ class _AutoCompleteInputFieldState extends State<AutoCompleteInputField> {
         return TextField(
           controller: textEditingController,
           focusNode: fieldFocusNode,
+          enabled: widget.enabled,
           inputFormatters: [textFormatter],
           decoration: InputDecoration(
             labelText: widget.label,

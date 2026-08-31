@@ -271,6 +271,16 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
+                  IconButton(
+                    onPressed: () => _loadItems(store),
+                    icon: const Icon(Icons.refresh),
+                    style: IconButton.styleFrom(
+                      backgroundColor: MyColors.mainColor(context).withOpacity(0.1),
+                      shape: const CircleBorder(),
+                    ),
+                    tooltip: "تحديث",
+                  ),
+                  const SizedBox(width: 10),
                   CustomActionButton(
                     text: "اضافة للسلع",
                     onPressed: () {

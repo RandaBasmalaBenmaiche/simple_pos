@@ -122,38 +122,36 @@ class _EditProductDialogState extends State<EditProductDialog> {
       });
       FocusScope.of(context).requestFocus(newCodeFocus);
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("المنتج غير موجود")));
     }
   }
 
   Future<void> submitUpdate() async {
-    if (nameController.text.isEmpty ||
-        priceController.text.isEmpty ||
-        quantityController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("الرجاء تعبئة جميع الحقول")));
-      return;
-    }
-
     bool success = false;
+
+    final String? newCode = newCodeController.text.isEmpty ? null : newCodeController.text;
+    final String? newName = nameController.text.isEmpty ? null : nameController.text;
+    final String? newPrice = priceController.text.isEmpty ? null : priceController.text;
+    final String? newQuantity = quantityController.text.isEmpty ? null : quantityController.text;
 
     if (codeController.text.isNotEmpty) {
       success = await stockTable.updateProduct(
         codeBar: codeController.text,
-        newCodeBar: newCodeController.text,
-        newName: nameController.text,
-        newPrice: priceController.text,
-        newQuantity: quantityController.text,
+        newCodeBar: newCode,
+        newName: newName,
+        newPrice: newPrice,
+        newQuantity: newQuantity,
         storeId: storeId,
       );
     } else if (oldNameController.text.isNotEmpty) {
       success = await stockTable.updateProductByName(
         name: oldNameController.text,
-        newCodeBar: newCodeController.text,
-        newName: nameController.text,
-        newPrice: priceController.text,
-        newQuantity: quantityController.text,
+        newCodeBar: newCode,
+        newName: newName,
+        newPrice: newPrice,
+        newQuantity: newQuantity,
         storeId: storeId,
       );
     }
@@ -161,19 +159,21 @@ class _EditProductDialogState extends State<EditProductDialog> {
     if (!success && loadedProductId != null) {
       success = await stockTable.updateProductById(
         id: loadedProductId!,
-        newCodeBar: newCodeController.text,
-        newName: nameController.text,
-        newPrice: priceController.text,
-        newQuantity: quantityController.text,
+        newCodeBar: newCode,
+        newName: newName,
+        newPrice: newPrice,
+        newQuantity: newQuantity,
       );
     }
 
     if (success) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text("تم التحديث بنجاح")));
       Navigator.pop(context);
       await widget.onUpdate();
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text("حدث خطأ أثناء التحديث")));
     }
@@ -206,6 +206,7 @@ class _EditProductDialogState extends State<EditProductDialog> {
               suggestions: _suggestions,
               isAlphanumeric: true,
               expands: false,
+              enabled: isEditable,
             ),
             const SizedBox(height: 10),
             if (isLoaded) ...[
