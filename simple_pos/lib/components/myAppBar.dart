@@ -50,8 +50,8 @@ class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
     return BlocBuilder<StoreCubit, int>(
       builder: (context, currentStoreId) {
         final titleText = currentStoreId == 1
-            ? "Kiosque Djalil Ranim"
-            : "Quincaillerie Djalil Ranim";
+            ? "Kiosque Djallil Ranim"
+            : "Quincaillerie Djallil Ranim";
 
         return AppBar(
           leading: widget.showReturnButton

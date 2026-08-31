@@ -96,7 +96,7 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     const ModeToggle(),
                     Text(
-                      'Kiosque Djalil & Ranim',
+                      'Kiosque Djallil & Ranim',
                       style: TextStyle(
                         fontSize: 30,
                         fontWeight: FontWeight.bold,

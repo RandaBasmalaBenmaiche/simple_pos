@@ -11,7 +11,8 @@ class SimpleAuthService {
 
   static final SimpleAuthService instance = SimpleAuthService._();
 
-  static const String _username = 'djalil';
+  static const String _username = String.fromEnvironment('SUPABASE_AUTH_USERNAME');
+
   static const String _authEmail = String.fromEnvironment(
     'SUPABASE_AUTH_EMAIL',
     defaultValue: '',

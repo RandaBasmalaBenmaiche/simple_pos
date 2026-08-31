@@ -20,7 +20,7 @@ jobs:
           channel: 'stable'
 
       - run: flutter pub get
-      - run: flutter build web --release --base-href "/simple_pos/"
+      - run: flutter build web --release --base-href "/simple_pos/" --dart-define=SUPABASE_AUTH_EMAIL=${{ secrets.SUPABASE_AUTH_EMAIL }} --dart-define=SUPABASE_AUTH_USERNAME=${{ secrets.SUPABASE_AUTH_USERNAME }}
 
       - uses: peaceiris/actions-gh-pages@v3
         with:

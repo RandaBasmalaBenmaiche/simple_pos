@@ -55,7 +55,7 @@ class DBfactory {
       final firstId = await _nextId(txn, 'stores');
       await storesStore.record(firstId).put(txn, {
         'id': firstId,
-        'name': 'Kiosque Djalil Ranim',
+        'name': 'Kiosque Djallil Ranim',
         'location': 'Annaba',
         'is_active': 1,
       });
