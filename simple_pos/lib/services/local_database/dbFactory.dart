@@ -23,6 +23,8 @@ class DBfactory {
       intMapStoreFactory.store('invoices');
   static final StoreRef<int, Map<String, Object?>> invoiceItemsStore =
       intMapStoreFactory.store('invoice_items');
+  static final StoreRef<int, Map<String, Object?>> productAliasesStore =
+      intMapStoreFactory.store('product_aliases');
   static final StoreRef<int, Map<String, Object?>> syncOutboxStore =
       intMapStoreFactory.store('sync_outbox');
 
@@ -33,6 +35,7 @@ class DBfactory {
         'debt_payments': debtPaymentsStore,
         'invoices': invoicesStore,
         'invoice_items': invoiceItemsStore,
+        'product_aliases': productAliasesStore,
       };
 
   static Future<HiveDatabase> getDatabase() async {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:simple_pos/components/scrollArrowButtons.dart';
 import 'package:simple_pos/components/myAppBar.dart';
+import 'package:simple_pos/components/product_matching_dialog.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
 import 'package:simple_pos/services/local_database/model/tableinvoice.dart';
@@ -11,6 +12,8 @@ import 'package:simple_pos/services/supabase/web_realtime_service.dart';
 import 'package:simple_pos/services/supabase/web_runtime.dart';
 import 'package:simple_pos/services/utils/sort_utils.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:simple_pos/services/gemini_service.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -475,6 +478,74 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     minStockFocusNode.dispose();
   }
 
+  Future<void> _addProductFromImage() async {
+    final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
+
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+
+    if (result == null || result.files.single.bytes == null) {
+      return;
+    }
+
+    final bytes = result.files.single.bytes!;
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text("جاري تحليل الصورة واستخراج المنتجات..."),
+            ],
+          ),
+        ),
+      );
+
+      final extracted = await GeminiService.instance.extractProductsFromImage(bytes);
+      if (context.mounted) Navigator.pop(context);
+
+      if (extracted.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("لم يتم العثور على منتجات في الصورة")),
+          );
+        }
+        return;
+      }
+
+      final success = await showDialog<bool>(
+        context: context,
+        builder: (context) => ProductMatchingDialog(
+          extractedProducts: extracted,
+          storeId: store,
+        ),
+      );
+
+      if (success == true) {
+        await _loadData(store);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("تم استيراد المنتجات بنجاح")),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("حدث خطأ أثناء التحليل: $e")),
+        );
+      }
+    }
+  }
+
   Future<void> _pickStartDate() async {
     DateTime? picked = await showDatePicker(
       context: context,
@@ -624,12 +695,26 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                     ),
                   ),
                 ),
-              ],
+                const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _addProductFromImage(),
+                      icon: const Icon(Icons.image_search, size: 18),
+                      label: const Text("اضف منتجات من صورة"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: MyColors.mainColor(context),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    
   }
 
   Widget _buildMainContent(BuildContext context) {
@@ -842,6 +927,19 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                             label: const Text("تصدير تقرير المخزون"),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.redAccent,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _addProductFromImage(),
+                            icon: const Icon(Icons.image_search),
+                            label: const Text("اضف منتجات من صورة"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: MyColors.mainColor(context),
                               foregroundColor: Colors.white,
                             ),
                           ),
