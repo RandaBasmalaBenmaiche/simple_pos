@@ -123502,7 +123502,7 @@ A.aIk.prototype={
 $0(){this.a.e=new A.bC(Date.now(),0,!1)},
 $S:0}
 A.aIj.prototype={
-$2(a,b){var s,r,q=null,p=b===1?"Kiosque Djalil Ranim":"Quincaillerie Djalil Ranim",o=this.a,n=o.a,m=n.c?A.hG(q,q,B.Xz,q,q,new A.aIh(a),q,q,q):q
+$2(a,b){var s,r,q=null,p=b===1?"Kiosque Djallil Ranim":"Quincaillerie Djallil Ranim",o=this.a,n=o.a,m=n.c?A.hG(q,q,B.Xz,q,q,new A.aIh(a),q,q,q):q
 n=n.d?new A.aR(B.aR,A.aK(p,q,q,q,B.aXD,q,q,q),q):q
 s=A.d1(a)
 r=o.a.d?100:60
@@ -124991,7 +124991,7 @@ if(k){s=1
 break}p.c.ae(t.J).f.du(B.aW_)
 case 1:return A.u(q,r)}})
 return A.v($async$zU,r)},
-L(a){var s,r,q=this,p=null,o=A.b([A.d1(a),A.e_(a)],t.t_),n=A.aK("Kiosque Djalil & Ranim",p,p,p,A.el(p,p,A.d1(a),p,p,p,p,p,p,p,p,30,p,p,B.aN,p,p,!0,p,p,p,p,p,p,p,p),p,p,p),m=A.fw(p,B.ba,!1,p,!0,B.T,p,A.fQ(),q.d,p,p,p,p,p,2,B.XZ,B.ao,!0,p,!0,p,!1,p,B.b6,p,p,p,p,p,p,p,p,1,p,p,!1,"\u2022",p,p,p,new A.aMe(q,a),p,!1,p,p,!1,p,!0,p,B.aR,p,p,p,p,p,p,p,p,p,p,p,p,!0,B.aD,p,B.by,p,B.fE,p,p),l=q.w
+L(a){var s,r,q=this,p=null,o=A.b([A.d1(a),A.e_(a)],t.t_),n=A.aK("Kiosque Djallil & Ranim",p,p,p,A.el(p,p,A.d1(a),p,p,p,p,p,p,p,p,30,p,p,B.aN,p,p,!0,p,p,p,p,p,p,p,p),p,p,p),m=A.fw(p,B.ba,!1,p,!0,B.T,p,A.fQ(),q.d,p,p,p,p,p,2,B.XZ,B.ao,!0,p,!0,p,!1,p,B.b6,p,p,p,p,p,p,p,p,1,p,p,!1,"\u2022",p,p,p,new A.aMe(q,a),p,!1,p,p,!1,p,!0,p,B.aR,p,p,p,p,p,p,p,p,p,p,p,p,!0,B.aD,p,B.by,p,B.fE,p,p),l=q.w
 l=A.fw(p,B.ba,!1,p,!0,B.T,p,A.fQ(),q.e,p,p,p,p,p,2,A.hc(p,B.eD,p,p,p,p,p,p,!0,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,p,"\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",!0,!0,!1,p,p,p,p,p,p,p,p,A.hG(p,p,A.i5(l?B.qr:B.qq,p,p),p,p,new A.aMf(q),p,p,p),p,p,p,p,p),B.ao,!0,p,!0,p,!1,q.f,B.b6,p,p,p,p,p,p,p,p,1,p,p,l,"\u2022",p,p,p,new A.aMg(q),p,!1,p,p,!1,p,!0,p,B.aR,p,p,p,p,p,p,p,p,p,p,p,p,!0,B.aD,p,B.by,p,p,p,p)
 s=q.r
 r=s?p:q.gaCy()
@@ -126266,7 +126266,7 @@ return A.v($async$d7,r)},
 Iu(a,b,c){return this.aMM(a,b,c)},
 aMM(a,b,c){var s=0,r=A.w(t.y),q,p=2,o=[],n=this,m,l,k,j
 var $async$Iu=A.r(function(d,e){if(d===1){o.push(e)
-s=p}for(;;)switch(s){case 0:if(B.p.ds(c)!=="djalil"){q=!1
+s=p}for(;;)switch(s){case 0:if(B.p.ds(c)!==""){q=!1
 s=1
 break}if(a===B.uO){if(b==="Kiosque123@"){n.a.sv(0,!0)
 q=!0
@@ -126357,7 +126357,7 @@ o=$.aXE()
 n=t.N
 m=t.X
 s=3
-return A.j(o.em(a,p,A.a8(["id",p,"name","Kiosque Djalil Ranim","location","Annaba","is_active",1],n,m)),$async$$1)
+return A.j(o.em(a,p,A.a8(["id",p,"name","Kiosque Djallil Ranim","location","Annaba","is_active",1],n,m)),$async$$1)
 case 3:s=4
 return A.j(A.jH(a,"stores"),$async$$1)
 case 4:q=c
