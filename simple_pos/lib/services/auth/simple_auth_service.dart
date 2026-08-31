@@ -91,29 +91,39 @@ class SimpleAuthService {
     required String password,
     AppMode mode = AppMode.online,
   }) async {
+    print('Login attempt: username=$username, mode=$mode');
     if (username.trim() != _username) {
+      print('Login failed: Username mismatch. Expected: $_username');
       return false;
     }
 
     if (mode == AppMode.offline) {
       if (password == 'Kiosque123@') {
+        print('Login successful: Offline mode');
         isLoggedIn.value = true;
         return true;
       }
+      print('Login failed: Incorrect offline password');
       return false;
     }
 
     if (!isConfigured) {
+      print('Login failed: Supabase not configured. URL: ${SupabaseProjectConfig.url}, Email: $_authEmail');
       return false;
     }
 
     try {
+      print('Attempting Supabase login for: $_authEmail');
       await Supabase.instance.client.auth.signInWithPassword(
         email: _authEmail,
         password: password,
       );
-      return _isAllowedSession(Supabase.instance.client.auth.currentSession);
-    } catch (_) {
+      final session = Supabase.instance.client.auth.currentSession;
+      final allowed = _isAllowedSession(session);
+      print('Supabase login result: ${allowed ? 'Success' : 'Session email mismatch'}');
+      return allowed;
+    } catch (e) {
+      print('Supabase login error: $e');
       return false;
     }
   }
