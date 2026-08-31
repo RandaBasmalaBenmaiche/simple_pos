@@ -46,17 +46,41 @@ class MainApp extends StatelessWidget {
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  void _onAuthChanged() {
+    if (SimpleAuthService.instance.isLoggedIn.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(WebRealtimeService.instance.initialize());
+        unawaited(SyncService.instance.triggerSync());
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    SimpleAuthService.instance.isLoggedIn.addListener(_onAuthChanged);
+    _onAuthChanged();
+  }
+
+  @override
+  void dispose() {
+    SimpleAuthService.instance.isLoggedIn.removeListener(_onAuthChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: SimpleAuthService.instance.isLoggedIn,
       builder: (context, isLoggedIn, _) {
-        // When the user has just clicked the Supabase password-recovery
-        // link, `isPasswordRecovery` is true. Show the Reset Password screen
-        // until they finish the flow (or sign out, which clears the flag).
         return ValueListenableBuilder<bool>(
           valueListenable: SimpleAuthService.instance.isPasswordRecovery,
           builder: (context, isPasswordRecovery, __) {
@@ -64,8 +88,6 @@ class AuthGate extends StatelessWidget {
               return const ResetPasswordPage();
             }
             if (isLoggedIn) {
-              unawaited(WebRealtimeService.instance.initialize());
-              unawaited(SyncService.instance.triggerSync());
               return const Landing();
             }
             return const LoginPage();

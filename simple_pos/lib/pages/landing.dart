@@ -43,7 +43,7 @@ class Landing extends StatelessWidget {
       context: context,
       builder: (dialogContext) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (passwordFocusNode.context != null) {
+          if (passwordFocusNode.context != null && passwordFocusNode.hasFocus == false) {
             passwordFocusNode.requestFocus();
           }
         });
@@ -105,83 +105,79 @@ class Landing extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Flexible(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        MyIconButton(
-                          onPressed: () {
-                            PriceDialog.show(
-                              context: context,
-                              title: "ادخل الكود الخاص بالسلعة",
-                              onSubmit: (_) {},
-                            );
-                          },
-                          imagePath: "assets/icons/price.png",
-                          text: "الثمن",
-                          showText: !isMobile,
-                        ),
-                        MyIconButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const POSPage()),
-                            );
-                          },
-                          imagePath: "assets/icons/sell.png",
-                          text: "بيع",
-                          showText: !isMobile,
-                        ),
-                        MyIconButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const POSPageCustomers()),
-                            );
-                          },
-                          imagePath: "assets/icons/customers.png",
-                          text: "الزبائن",
-                          showText: !isMobile,
-                        ),
-                      ],
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      MyIconButton(
+                        onPressed: () {
+                          PriceDialog.show(
+                            context: context,
+                            title: "ادخل الكود الخاص بالسلعة",
+                            onSubmit: (_) {},
+                          );
+                        },
+                        imagePath: "assets/icons/price.png",
+                        text: "الثمن",
+                        showText: !isMobile,
+                      ),
+                      MyIconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const POSPage()),
+                          );
+                        },
+                        imagePath: "assets/icons/sell.png",
+                        text: "بيع",
+                        showText: !isMobile,
+                      ),
+                      MyIconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const POSPageCustomers()),
+                          );
+                        },
+                        imagePath: "assets/icons/customers.png",
+                        text: "الزبائن",
+                        showText: !isMobile,
+                      ),
+                    ],
                   ),
-                  Flexible(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        MyIconButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const POSPageStock()),
-                            );
-                          },
-                          imagePath: "assets/icons/stock.png",
-                          text: "المخزن",
-                          showText: !isMobile,
-                        ),
-                        MyIconButton(
-                          onPressed: () => _showPrivateSpaceDialog(context),
-                          imagePath: "assets/icons/locked.png",
-                          text: "الفضاء الخاص",
-                          showText: !isMobile,
-                        ),
-                        MyIconButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const POSPageHistorique()),
-                            );
-                          },
-                          imagePath: "assets/icons/history.png",
-                          text: "تاريخ المبيعات",
-                          showText: !isMobile,
-                        ),
-                      ],
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      MyIconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const POSPageStock()),
+                          );
+                        },
+                        imagePath: "assets/icons/stock.png",
+                        text: "المخزن",
+                        showText: !isMobile,
+                      ),
+                      MyIconButton(
+                        onPressed: () => _showPrivateSpaceDialog(context),
+                        imagePath: "assets/icons/locked.png",
+                        text: "الفضاء الخاص",
+                        showText: !isMobile,
+                      ),
+                      MyIconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const POSPageHistorique()),
+                          );
+                        },
+                        imagePath: "assets/icons/history.png",
+                        text: "تاريخ المبيعات",
+                        showText: !isMobile,
+                      ),
+                    ],
                   ),
                 ],
               ),

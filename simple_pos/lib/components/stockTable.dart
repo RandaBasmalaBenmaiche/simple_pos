@@ -30,15 +30,6 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
   @override
   void didUpdateWidget(covariant POSStockItemsTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final currentIds = widget.items.map((item) => item['id'] as int).toSet();
-    final keysToRemove =
-        _controllers.keys.where((id) => !currentIds.contains(id)).toList();
-    for (final key in keysToRemove) {
-      _controllers[key]?.dispose();
-      _controllers.remove(key);
-      _focusNodes[key]?.dispose();
-      _focusNodes.remove(key);
-    }
   }
 
   @override

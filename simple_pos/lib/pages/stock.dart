@@ -37,11 +37,6 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
   SortMode _sortMode = SortMode.latin;
   SortOrder _sortOrder = SortOrder.ascending;
 
-  // Add this RouteObserver to your app — declare it globally
-  // e.g. in main.dart: final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
-  // and add it to MaterialApp: navigatorObservers: [routeObserver]
-  // then import it here
-
   @override
   void initState() {
     super.initState();
@@ -61,7 +56,6 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Subscribe to route observer
     routeObserver.subscribe(this, ModalRoute.of(context)! as PageRoute);
   }
 
@@ -74,7 +68,6 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
     super.dispose();
   }
 
-  // Called when coming back to this page from another route
   @override
   void didPopNext() {
     _loadItems(_currentStoreId);
@@ -104,7 +97,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
   void _toggleSortMode() {
     setState(() {
       _sortMode = _sortMode == SortMode.latin ? SortMode.arabic : SortMode.latin;
-      _sortOrder = SortOrder.ascending; // Reset to ascending when changing mode
+      _sortOrder = SortOrder.ascending;
       items = sortProducts(allItems, _sortMode, order: _sortOrder);
     });
   }
@@ -153,9 +146,6 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
       if (csvString == null) return;
       List<List<dynamic>> csvTable = const CsvToListConverter().convert(csvString);
 
-      // Use an idempotent upsert so re-importing the same CSV does not
-      // duplicate products. Identity is (store_id, productCodeBar) with a
-      // fallback to (store_id, productName) when the barcode is empty.
       int added = 0;
       int updated = 0;
       for (var i = 1; i < csvTable.length; i++) {
@@ -168,7 +158,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
           'productCodeBar': row[3]?.toString().isNotEmpty == true ? row[3].toString() : null,
           'productQuantity': row[4]?.toString().isNotEmpty == true ? row[4].toString() : null,
         });
-        if (result.id < 0) continue; // error
+        if (result.id < 0) continue;
         if (result.created) {
           added += 1;
         } else {
@@ -358,75 +348,71 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
               ),
             ),
             const SizedBox(height: 20),
-            Flexible(
-              child: Scrollbar(
-                thumbVisibility: true,
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.68,
-                  child: POSStockItemsTable(
-                  items: items,
-                  sellItems: () {},
-                  onQuantityChanged: (index, newQuantity) async {
+            Expanded(
+              child: POSStockItemsTable(
+                items: items,
+                sellItems: () {},
+                onQuantityChanged: (index, newQuantity) async {
+                  final product = items[index];
+                  final productKeyId = product['id'];
+
+                  setState(() {
+                    items[index]["productQuantity"] = newQuantity;
+                    final allIndex =
+                        allItems.indexWhere((e) => e['id'] == productKeyId);
+                    if (allIndex != -1) allItems[allIndex]["productQuantity"] = newQuantity;
+                  });
+
+                  final productId = product['id'] as int?;
+                  final success = productId != null
+                      ? await _stockTable.updateProductById(
+                          id: productId,
+                          newQuantity:
+                              newQuantity.isNotEmpty ? newQuantity : null,
+                        )
+                      : await _stockTable.updateProduct(
+                          codeBar: product['productCodeBar'] ?? '',
+                          newQuantity:
+                              newQuantity.isNotEmpty ? newQuantity : null,
+                          storeId: store,
+                        );
+                  if (!success && mounted) {
+                    await _loadItems(store);
+                  }
+                },
+                onDelete: (index) async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: const Text("هل أنت متأكد؟", textAlign: TextAlign.center),
+                        content: const Text("سيتم حذف هذا المنتج نهائيًا!", textAlign: TextAlign.center),
+                        actionsAlignment: MainAxisAlignment.center,
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text("إلغاء", style: TextStyle(color: Colors.grey)),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text("حذف", style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (confirm == true) {
                     final product = items[index];
-                    final productKeyId = product['id'];
-
-                    setState(() {
-                      items[index]["productQuantity"] = newQuantity;
-                      final allIndex =
-                          allItems.indexWhere((e) => e['id'] == productKeyId);
-                      if (allIndex != -1) allItems[allIndex]["productQuantity"] = newQuantity;
-                    });
-
                     final productId = product['id'] as int?;
                     final success = productId != null
-                        ? await _stockTable.updateProductById(
-                            id: productId,
-                            newQuantity:
-                                newQuantity.isNotEmpty ? newQuantity : null,
-                          )
-                        : await _stockTable.updateProduct(
-                            codeBar: product['productCodeBar'] ?? '',
-                            newQuantity:
-                                newQuantity.isNotEmpty ? newQuantity : null,
-                            storeId: store,
+                        ? await _stockTable.deleteProductById(productId)
+                        : await _stockTable.deleteProduct(
+                            product['productCodeBar'] ?? '',
+                            store,
                           );
-                    if (!success && mounted) {
-                      await _loadItems(store);
-                    }
-                  },
-                  onDelete: (index) async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) {
-                        return AlertDialog(
-                          title: const Text("هل أنت متأكد؟", textAlign: TextAlign.center),
-                          content: const Text("سيتم حذف هذا المنتج نهائيًا!", textAlign: TextAlign.center),
-                          actionsAlignment: MainAxisAlignment.center,
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text("إلغاء", style: TextStyle(color: Colors.grey)),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                              onPressed: () => Navigator.of(context).pop(true),
-                              child: const Text("حذف", style: TextStyle(color: Colors.white)),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-
-                    if (confirm == true) {
-                      final product = items[index];
-                      final productId = product['id'] as int?;
-                      final success = productId != null
-                          ? await _stockTable.deleteProductById(productId)
-                          : await _stockTable.deleteProduct(
-                              product['productCodeBar'] ?? '',
-                              store,
-                            );
-                          if (success) {
+                              if (success) {
                         setState(() {
                           items.removeAt(index);
                           if (productId != null) {
@@ -437,9 +423,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                         await _loadItems(store);
                       }
                     }
-                  },
-                ),
-              ),
+                },
               ),
             ),
           ],
