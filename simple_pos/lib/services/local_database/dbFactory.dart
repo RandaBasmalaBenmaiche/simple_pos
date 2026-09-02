@@ -50,6 +50,7 @@ class DBfactory {
     _database = await HiveDatabase.open(databaseName);
 
     await _ensureSeedData(_database!);
+    await _cleanupCorruptProductAliases(_database!);
     await _ensureSyncMetadata(_database!);
     return _database!;
   }
@@ -162,8 +163,13 @@ class DBfactory {
     }
 
     final now = nowIso();
+    final localId = record['id'] as int?;
+    if (localId == null) {
+      print('CRITICAL: queueUpsert called for table $table with null record id. Record: $record');
+      throw StateError('Cannot queue sync for table $table: record missing id');
+    }
     final payload = Map<String, Object?>.from(record)
-      ..['local_id'] = record['id']
+      ..['local_id'] = localId
       ..remove('id')
       ..remove('sync_status')
       ..remove('last_synced_at');
@@ -307,6 +313,53 @@ class DBfactory {
         'last_synced_at': nowIso(),
       });
     });
+  }
+
+  static Future<void> _cleanupCorruptProductAliases(DatabaseClient client) async {
+    // 1. Clean up corrupt records in the main table
+    final snapshots = await productAliasesStore.find(client);
+    for (final snapshot in snapshots) {
+      final record = snapshot.value;
+      if (record['product_id'] == null || record['store_id'] == null) {
+        final syncId = record['sync_id']?.toString();
+        await productAliasesStore.record(snapshot.key).delete(client);
+        if (syncId != null && syncId.isNotEmpty) {
+          await removeOutboxForRecord(
+            client,
+            table: 'product_aliases',
+            recordSyncId: syncId,
+          );
+        }
+        print('Cleaned up corrupt product_alias record: ${snapshot.key}');
+      }
+    }
+
+    // 2. Clean up orphaned or corrupt entries in the Outbox
+    final outbox = await syncOutboxStore.find(client);
+    for (final op in outbox) {
+      final val = op.value;
+      if (val['table'] == 'product_aliases') {
+        final recordSyncId = val['record_sync_id']?.toString();
+        final payload = val['payload'] as Map?;
+
+        // Delete if payload is missing critical IDs OR if the main record is gone
+        bool isCorrupt = payload == null || payload['local_id'] == null;
+        bool isOrphaned = false;
+
+        if (!isCorrupt && recordSyncId != null) {
+          final existing = await productAliasesStore.find(
+            client,
+            finder: Finder(filter: Filter.equals('sync_id', recordSyncId)),
+          );
+          if (existing.isEmpty) isOrphaned = true;
+        }
+
+        if (isCorrupt || isOrphaned) {
+          await syncOutboxStore.record(op.key).delete(client);
+          print('Cleaned up corrupt/orphaned product_alias from outbox: ${op.key}');
+        }
+      }
+    }
   }
 
   static Future<void> _ensureSyncMetadata(HiveDatabase db) async {

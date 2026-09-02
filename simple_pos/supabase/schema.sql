@@ -154,4 +154,29 @@ grant all on public.stock to authenticated;
 grant all on public.customers to authenticated;
 grant all on public.debt_payments to authenticated;
 grant all on public.invoices to authenticated;
-grant all on public.invoice_items to authenticated;
+create table if not exists public.notifications (
+  sync_id uuid primary key,
+  local_id bigint not null,
+  device_id uuid,
+  updated_at timestamptz not null,
+  store_id bigint not null,
+  type text not null,
+  product_id bigint,
+  severity text,
+  message text,
+  created_at timestamptz not null,
+  is_seen integer not null default 0
+);
+
+alter table public.notifications enable row level security;
+
+drop policy if exists notifications_authenticated_access on public.notifications;
+create policy notifications_authenticated_access
+on public.notifications
+for all
+to authenticated
+using (true)
+with check (true);
+
+grant all on public.notifications to authenticated;
+

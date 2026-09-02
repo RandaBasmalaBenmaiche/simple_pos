@@ -16,6 +16,10 @@ class SupabaseRowMapper {
           'productquantity': normalized['productQuantity'],
           'min_stock': normalized['min_stock'],
         }..removeWhere((key, _) => _stockCamelKeys.contains(key));
+      case 'product_aliases':
+        return {
+          ...normalized,
+        }..remove('product_id')..remove('store_id');
       case 'invoice_items':
         return {
           ...normalized,

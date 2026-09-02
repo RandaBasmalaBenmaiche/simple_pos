@@ -7,6 +7,7 @@ import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
 import 'package:simple_pos/services/local_database/model/tableinvoice.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
+import 'package:simple_pos/services/cubits/import_cubit.dart';
 import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/services/supabase/web_realtime_service.dart';
 import 'package:simple_pos/services/supabase/web_runtime.dart';
@@ -52,6 +53,7 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
     _loadData(store);
     searchController.addListener(_onSearchChanged);
+    _listenToImportStatus();
     if (useSupabaseWeb) {
       _realtimeSub = WebRealtimeService.instance.changes.listen((tables) {
         if ((tables.contains('stock') ||
@@ -64,6 +66,28 @@ class _POSPageOverviewState extends State<POSPageOverview> {
         }
       });
     }
+  }
+
+  void _listenToImportStatus() {
+    context.read<ImportCubit>().stream.listen((state) {
+      if (state.status == ImportStatus.success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم استيراد ${state.importedCount} منتج بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
+        _loadData(store);
+      } else if (state.status == ImportStatus.failure && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ أثناء الاستيراد: ${state.errorMessage}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    });
   }
 
   @override

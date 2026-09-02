@@ -69,6 +69,24 @@ class DAliasesTable {
     }
   }
 
+  Future<Map<String, dynamic>?> getAliasForNameGlobal(String name) async {
+    try {
+      final db = await DBfactory.getDatabase();
+      final normalizedName = name.trim().toLowerCase();
+      final snapshots = await DBfactory.productAliasesStore.find(db);
+      for (final snapshot in snapshots) {
+        final record = snapshot.value as Map<String, Object?>;
+        if (record['alias_name']?.toString().trim().toLowerCase() == normalizedName) {
+          return _normalize(snapshot.key, record);
+        }
+      }
+      return null;
+    } catch (e, stacktrace) {
+      print('Get alias global error: $e --> $stacktrace');
+      return null;
+    }
+  }
+
   Future<bool> deleteAlias(int id) async {
     try {
       final db = await DBfactory.getDatabase();

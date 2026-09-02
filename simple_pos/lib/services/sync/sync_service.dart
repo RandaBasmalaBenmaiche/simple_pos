@@ -4,7 +4,6 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../local_database/dbFactory.dart';
-import '../local_database/hive_database.dart';
 import '../supabase/supabase_project_config.dart';
 import '../supabase/supabase_row_mapper.dart';
 
@@ -16,6 +15,7 @@ class SyncService with WidgetsBindingObserver {
     'stores',
     'customers',
     'stock',
+    'product_aliases',
     'invoices',
     'invoice_items',
     'debt_payments',
@@ -24,6 +24,7 @@ class SyncService with WidgetsBindingObserver {
 
   bool _initialized = false;
   bool _isSyncRunning = false;
+  bool get isSyncRunning => _isSyncRunning;
   Timer? _timer;
 
   bool get isConfigured => SupabaseProjectConfig.isConfigured;
@@ -80,16 +81,25 @@ class SyncService with WidgetsBindingObserver {
     );
 
     for (final operation in pending) {
-      final synced = await _syncOperation(db, operation);
-      if (!synced) {
-        break;
+      try {
+        final synced = await _syncOperation(db, operation);
+        if (!synced) {
+          print('Sync operation returned false for record ${operation.key} (table: ${operation.value['table']})');
+        }
+      } catch (e, stackTrace) {
+        print('Critical error syncing record ${operation.key}: $e');
+        print('Stacktrace: $stackTrace');
       }
     }
   }
 
   Future<void> _pullRemoteChanges(HiveDatabase db) async {
     for (final table in _pullOrder) {
-      await _pullRemoteTable(db, table);
+      try {
+        await _pullRemoteTable(db, table);
+      } catch (e) {
+        print('Error pulling table $table: $e');
+      }
     }
   }
 
@@ -224,7 +234,31 @@ class SyncService with WidgetsBindingObserver {
           row['customer_id'] = customer.key;
         }
       }
+    } else if (table == 'product_aliases') {
+      final productSyncId = remoteRow['product_sync_id']?.toString();
+      if (productSyncId != null && productSyncId.isNotEmpty) {
+        final product = await _findRecordBySyncId(
+          txn,
+          DBfactory.stockStore,
+          productSyncId,
+        );
+        if (product != null) {
+          row['product_id'] = product.key;
+        }
+      }
+      final storeSyncId = remoteRow['store_sync_id']?.toString();
+      if (storeSyncId != null && storeSyncId.isNotEmpty) {
+        final store = await _findRecordBySyncId(
+          txn,
+          DBfactory.storesStore,
+          storeSyncId,
+        );
+        if (store != null) {
+          row['store_id'] = store.key;
+        }
+      }
     }
+
 
     return row;
   }
@@ -313,11 +347,39 @@ class SyncService with WidgetsBindingObserver {
         }
         await query.delete().eq('sync_id', syncId);
       } else {
+        if (table == 'product_aliases') {
+          final rawPayload = operation.value['payload'] as Map?;
+          if (rawPayload == null) return false;
+
+          final productId = rawPayload['product_id'] as int?;
+          final storeId = rawPayload['store_id'] as int?;
+
+          if (productId == null || storeId == null) {
+            print('Sync skipped for product_alias ${operation.key}: missing local productId ($productId) or storeId ($storeId)');
+            return false;
+          }
+
+          final product = await DBfactory.stockStore.record(productId).get(db);
+          final store = await DBfactory.storesStore.record(storeId).get(db);
+
+          final productSyncId = product?['sync_id']?.toString();
+          final storeSyncId = store?['sync_id']?.toString();
+
+          if (productSyncId == null || productSyncId.isEmpty ||
+              storeSyncId == null || storeSyncId.isEmpty) {
+            print('Sync skipped for product_alias ${operation.key}: dependencies not yet synced. ProductSyncId: $productSyncId, StoreSyncId: $storeSyncId');
+            return false;
+          }
+
+          payload['product_sync_id'] = productSyncId;
+          payload['store_sync_id'] = storeSyncId;
+        }
+
         await query.upsert(payload, onConflict: 'sync_id');
 
-        final recordId = payload['local_id'];
+        final recordId = operation.key;
         final updatedAt = payload['updated_at']?.toString();
-        if (recordId is int && updatedAt != null && updatedAt.isNotEmpty) {
+        if (updatedAt != null && updatedAt.isNotEmpty) {
           await DBfactory.markRecordSynced(
             table: table,
             recordId: recordId,
@@ -330,6 +392,7 @@ class SyncService with WidgetsBindingObserver {
       return true;
     } catch (error) {
       final nextRetry = ((row['retry_count'] as int?) ?? 0) + 1;
+      print('Supabase Upsert Error for record ${operation.key} in table $table: $error');
       await DBfactory.syncOutboxStore.record(operation.key).put(db, {
         ...row,
         'status': 'failed',

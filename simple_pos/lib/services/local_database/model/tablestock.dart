@@ -51,6 +51,21 @@ class DStockTable {
     }
   }
 
+  Future<Map<String, dynamic>?> getProductBySyncId(String syncId) async {
+    try {
+      final db = await DBfactory.getDatabase();
+      final matches = await DBfactory.stockStore.find(
+        db,
+        finder: Finder(filter: Filter.equals('sync_id', syncId), limit: 1),
+      );
+      if (matches.isEmpty) return null;
+      return _normalize(matches.first.key, matches.first.value);
+    } catch (e, stacktrace) {
+      print('Get product by syncId error: $e --> $stacktrace');
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> getProductById(int id) async {
     try {
       final db = await DBfactory.getDatabase();

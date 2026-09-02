@@ -14,7 +14,7 @@ class HiveDatabase {
   static Future<void>? _initFuture;
 
   static Future<HiveDatabase> open(String name) async {
-    _initFuture ??= Hive.initFlutter(name);
+    _initFuture ??= Hive.initFlutter();
     await _initFuture;
     return HiveDatabase._(name);
   }

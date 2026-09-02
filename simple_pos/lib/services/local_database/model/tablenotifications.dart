@@ -3,8 +3,10 @@ import '../dbFactory.dart';
 class DNotificationTable {
   Future<int?> insertNotification({
     required int storeId,
-    required int productId,
-    required String severity,
+    required String type,
+    int? productId,
+    String? severity,
+    String? message,
     required String createdAt,
     bool isSeen = false,
   }) async {
@@ -16,8 +18,10 @@ class DNotificationTable {
         final record = DBfactory.withSyncMetadata({
           'id': id,
           'store_id': storeId,
+          'type': type,
           'product_id': productId,
           'severity': severity,
+          'message': message,
           'created_at': createdAt,
           'is_seen': isSeen ? 1 : 0,
         }, deviceId: deviceId);

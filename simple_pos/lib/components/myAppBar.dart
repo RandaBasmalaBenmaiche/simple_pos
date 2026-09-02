@@ -87,7 +87,7 @@ class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
                   final notifications = state.notifications;
                   final unseenCount = notifications.where((n) => !n.isSeen).length;
                   print('myAppBar: Building notification badge. Unseen count: $unseenCount');
-                  return PopupMenuButton<StockNotification>(
+                  return PopupMenuButton<POSNotification>(
                     icon: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -128,7 +128,7 @@ class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
                     itemBuilder: (context) {
                       if (notifications.isEmpty) {
                         return [
-                          const PopupMenuItem<StockNotification>(
+                          const PopupMenuItem<POSNotification>(
                             value: null,
                             child: Text("لا توجد تنبيهات"),
                           ),
@@ -136,7 +136,28 @@ class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
                       }
                       return notifications.map((n) {
                         final date = DateFormat('yyyy-MM-dd HH:mm').format(n.createdAt);
-                        return PopupMenuItem<StockNotification>(
+                        String title = "";
+                        Widget leadingIcon = const SizedBox.shrink();
+
+                        if (n is StockNotification) {
+                          title = "${n.productName} (الكمية: ${n.currentQuantity})";
+                          leadingIcon = Icon(
+                            Icons.circle,
+                            color: n.severity == NotificationSeverity.red
+                                ? Colors.red
+                                : Colors.yellow,
+                            size: 12,
+                          );
+                        } else if (n is GeneralNotification) {
+                          title = n.message;
+                          leadingIcon = const Icon(
+                            Icons.info,
+                            color: Colors.blue,
+                            size: 12,
+                          );
+                        }
+
+                        return PopupMenuItem<POSNotification>(
                           value: n,
                           child: InkWell(
                             onTap: () {
@@ -151,17 +172,11 @@ class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
                                 children: [
                                   Row(
                                     children: [
-                                      Icon(
-                                        Icons.circle,
-                                        color: n.severity == NotificationSeverity.red
-                                            ? Colors.red
-                                            : Colors.yellow,
-                                        size: 12,
-                                      ),
+                                      leadingIcon,
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          "${n.productName} (الكمية: ${n.currentQuantity})",
+                                          title,
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: n.isSeen ? FontWeight.normal : FontWeight.bold,
@@ -169,10 +184,11 @@ class _CustomPOSAppBarState extends State<CustomPOSAppBar> {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      Text(
-                                        "الحد: ${n.minStock}",
-                                        style: const TextStyle(fontSize: 14, color: Colors.grey),
-                                      ),
+                                      if (n is StockNotification)
+                                        Text(
+                                          "الحد: ${n.minStock}",
+                                          style: const TextStyle(fontSize: 14, color: Colors.grey),
+                                        ),
                                     ],
                                   ),
                                   Text(

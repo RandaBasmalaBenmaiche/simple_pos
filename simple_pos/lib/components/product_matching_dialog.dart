@@ -3,6 +3,10 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
 import 'package:simple_pos/services/local_database/model/tablealiases.dart';
 import 'package:simple_pos/services/local_database/dbFactory.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:simple_pos/services/cubits/import_cubit.dart';
+import 'package:simple_pos/services/cubits/notification_cubit.dart';
+import 'package:simple_pos/services/sync/sync_service.dart';
 
 class ProductMatchingDialog extends StatefulWidget {
   final List<Map<String, String>> extractedProducts;
@@ -52,10 +56,32 @@ class _ProductMatchingDialogState extends State<ProductMatchingDialog> {
       String? matchedProductName;
 
       if (aliasMatch != null) {
-        matchedProductId = aliasMatch['product_id'] as int;
+        final productSyncId = aliasMatch['product_sync_id']?.toString();
+
+        if (productSyncId != null && productSyncId.isNotEmpty) {
+          final stockTable = DStockTable();
+          final product = await stockTable.getProductBySyncId(productSyncId);
+          if (product != null) {
+            matchedProductId = product['id'] as int;
+            matchedProductName = product['productName'] as String?;
+          }
+        }
+
+        if (matchedProductId == null) {
+          final productId = aliasMatch['product_id'] as int;
+          final stockTable = DStockTable();
+          final product = await stockTable.getProductById(productId);
+          matchedProductId = product?['id'] as int?;
+          matchedProductName = product?['productName'] as String?;
+        }
+      } else {
+        // Also check for exact name match
         final stockTable = DStockTable();
-        final product = await stockTable.getProductById(matchedProductId);
-        matchedProductName = product?['productName'] as String?;
+        final productMatch = await stockTable.getProductByName(name, widget.storeId);
+        if (productMatch != null) {
+          matchedProductId = productMatch['id'] as int;
+          matchedProductName = productMatch['productName'] as String?;
+        }
       }
 
       data.add({
@@ -75,64 +101,18 @@ class _ProductMatchingDialogState extends State<ProductMatchingDialog> {
   }
 
   Future<void> _confirmImport() async {
-    setState(() {
-      isImporting = true;
-    });
+    final importCubit = context.read<ImportCubit>();
+    final notificationCubit = context.read<NotificationCubit>();
 
-    final stockTable = DStockTable();
-    final aliasTable = DAliasesTable();
-    bool overallSuccess = true;
-
-    for (var item in matchingData) {
-      final productId = item['matchedProductId'] as int?;
-      final extractedName = (item['nameController'] as TextEditingController).text;
-      final qty = double.tryParse((item['qtyController'] as TextEditingController).text) ?? 0;
-
-      if (productId != null) {
-        // Update stock quantity
-        final product = await stockTable.getProductById(productId);
-        if (product != null) {
-          final currentQty = double.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
-          final newQty = (currentQty + qty).toString();
-
-          await stockTable.updateProductById(
-            id: productId,
-            newQuantity: newQty,
-          );
-
-          // Save as alias if it's different from the original product name
-          final originalName = product['productName'] as String;
-          if (extractedName.trim().toLowerCase() != originalName.trim().toLowerCase()) {
-            await aliasTable.saveAlias(
-              productId: productId,
-              productSyncId: product['sync_id']?.toString() ?? '',
-              aliasName: extractedName,
-              storeId: widget.storeId,
-              storeSyncId: (await DBfactory.storesStore.record(widget.storeId).get(await DBfactory.getDatabase()))?['sync_id']?.toString() ?? '',
-            );
-          }
-        } else {
-          overallSuccess = false;
-        }
-      } else {
-        // Create new product if no match was found
-        final newId = await stockTable.insertProduct(
-          storeId: widget.storeId,
-          name: extractedName,
-          quantity: qty.toString(),
-        );
-        if (newId == null) {
-          overallSuccess = false;
-        }
-      }
-    }
-
-    setState(() {
-      isImporting = false;
-    });
+    // Pass the matching data to the cubit for background processing
+    importCubit.importProducts(
+      matchingData: matchingData,
+      storeId: widget.storeId,
+      notificationCubit: notificationCubit,
+    );
 
     if (mounted) {
-      Navigator.pop(context, overallSuccess);
+      Navigator.pop(context, true);
     }
   }
 
@@ -140,36 +120,103 @@ class _ProductMatchingDialogState extends State<ProductMatchingDialog> {
     final name = (item['nameController'] as TextEditingController).text;
     if (name.trim().isEmpty) return;
 
+    print('🔍 Suggesting match for: \"$name\" in store: ${widget.storeId}');
+
     final aliasTable = DAliasesTable();
     final stockTable = DStockTable();
 
-    // 1. Check aliases
-    final aliasMatch = await aliasTable.getAliasForName(name, widget.storeId);
+    // 1. Try to find a match locally first
+    Map<String, dynamic>? aliasMatch = await aliasTable.getAliasForName(name, widget.storeId);
+    Map<String, dynamic>? productMatch = await stockTable.getProductByName(name, widget.storeId);
+
+    // 2. If no match was found locally, try to sync from cloud and search again
+    if (aliasMatch == null && productMatch == null) {
+      print('⚠️ No local match found. Trying to sync from cloud...');
+
+      // Wait if a sync is already running
+      while (SyncService.instance.isSyncRunning) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      await SyncService.instance.flush();
+      print('✅ Cloud sync completed. Re-checking for matches...');
+
+      // Re-check local database
+      aliasMatch = await aliasTable.getAliasForName(name, widget.storeId);
+      productMatch = await stockTable.getProductByName(name, widget.storeId);
+    }
+
+    // 3. If still no match, try searching for the alias GLOBALLY (across all stores)
+    if (aliasMatch == null && productMatch == null) {
+      print('🌍 Trying global alias search...');
+      final globalAlias = await aliasTable.getAliasForNameGlobal(name);
+      if (globalAlias != null) {
+        print('✅ Global alias found: ${globalAlias['alias_name']}');
+        final productSyncId = globalAlias['product_sync_id']?.toString();
+        if (productSyncId != null && productSyncId.isNotEmpty) {
+          final product = await stockTable.getProductBySyncId(productSyncId);
+          if (product != null) {
+            aliasMatch = globalAlias; // Treat as a match since the product exists locally
+            print('🔗 Global alias linked to local product: ${product['productName']}');
+          }
+        }
+      }
+    }
+
+    // 4. Handle alias match
     if (aliasMatch != null) {
-      final productId = aliasMatch['product_id'] as int;
-      final product = await stockTable.getProductById(productId);
-      if (product != null) {
+      print('✅ Alias found: ${aliasMatch['alias_name']} -> ProductID: ${aliasMatch['product_id']}');
+
+      final productSyncId = aliasMatch['product_sync_id']?.toString();
+      int? matchedProductId;
+      String? matchedProductName;
+
+      if (productSyncId != null && productSyncId.isNotEmpty) {
+        final product = await stockTable.getProductBySyncId(productSyncId);
+        if (product != null) {
+          matchedProductId = product['id'] as int;
+          matchedProductName = product['productName'];
+          print('🔗 Linked via SyncID: $matchedProductName');
+        }
+      }
+
+      if (matchedProductId == null) {
+        final productId = aliasMatch['product_id'] as int?;
+        if (productId != null) {
+          final product = await stockTable.getProductById(productId);
+          if (product != null) {
+            matchedProductId = product['id'] as int;
+            matchedProductName = product['productName'];
+            print('🔗 Linked via LocalID: $matchedProductName');
+          } else {
+            print('❌ Alias found, but Product ID $productId not found in local stock');
+          }
+        }
+      }
+
+      if (matchedProductId != null) {
         setState(() {
-          item['matchedProductId'] = productId;
-          item['matchedProductName'] = product['productName'];
-          (item['controller'] as TextEditingController).text = product['productName'];
+          item['matchedProductId'] = matchedProductId;
+          item['matchedProductName'] = matchedProductName;
+          (item['controller'] as TextEditingController).text = matchedProductName ?? '';
         });
         return;
       }
     }
 
-    // 2. Check exact name match in stock
-    final productMatch = await stockTable.getProductByName(name, widget.storeId);
+    // 5. Handle exact name match in stock
     if (productMatch != null) {
+      print('✅ Exact name match found: ${productMatch['productName']}');
       setState(() {
-        item['matchedProductId'] = productMatch['id'];
-        item['matchedProductName'] = productMatch['productName'];
-        (item['controller'] as TextEditingController).text = productMatch['productName'];
+        item['matchedProductId'] = productMatch?['id'];
+        item['matchedProductName'] = productMatch?['productName'];
+        (item['controller'] as TextEditingController).text = productMatch?['productName'] ?? '';
       });
       return;
     }
 
-    // No match found
+    // No match found after local, remote, and global attempts
+    print('❌ No match found for \"$name\" in store ${widget.storeId} (even after sync and global search)');
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("لم يتم العثور على منتج مطابق")),
@@ -234,9 +281,9 @@ class _ProductMatchingDialogState extends State<ProductMatchingDialog> {
                             children: [
                               Expanded(
                                 child: TypeAheadField<Map<String, dynamic>>(
+                                  controller: item['controller'] as TextEditingController,
                                   suggestionsCallback: (pattern) async {
                                     final stockTable = DStockTable();
-                                    final aliasTable = DAliasesTable();
                                     final storeId = widget.storeId;
                                     final query = pattern.toLowerCase();
 
@@ -256,10 +303,10 @@ class _ProductMatchingDialogState extends State<ProductMatchingDialog> {
                                       final db = await DBfactory.getDatabase();
                                       final aliasSnapshots = await DBfactory.productAliasesStore.find(db);
                                       final hasMatchingAlias = aliasSnapshots.any((s) {
-                                        final record = s.value as Map<String, Object?>;
-                                        return record['product_id'] == p['id'] &&
-                                               record['alias_name']?.toString().toLowerCase().contains(query) == true &&
-                                               record['store_id'] == storeId;
+                                        final record = s.value;
+                                        return record?['product_id'] == p['id'] &&
+                                               record?['alias_name']?.toString().toLowerCase().contains(query) == true &&
+                                               record?['store_id'] == storeId;
                                       });
 
                                       if (hasMatchingAlias) {

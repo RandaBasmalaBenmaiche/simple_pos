@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/cubits/mode_cubit.dart';
 import 'package:simple_pos/services/cubits/notification_cubit.dart';
+import 'package:simple_pos/services/cubits/import_cubit.dart';
 import 'package:simple_pos/pages/landing.dart';
 import 'package:simple_pos/pages/login.dart';
 import 'package:simple_pos/pages/reset_password.dart';
@@ -29,6 +30,7 @@ void main() async {
         BlocProvider(create: (_) => StoreCubit()),
         BlocProvider(create: (_) => ModeCubit()),
         BlocProvider(create: (_) => NotificationCubit()),
+        BlocProvider(create: (_) => ImportCubit()),
       ],
       child: const MainApp(),
     ),

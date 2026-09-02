@@ -33,6 +33,7 @@ class NotificationService {
     if (lastSeverity == null || lastSeverity != currentSeverity) {
       await _notificationTable.insertNotification(
         storeId: storeId,
+        type: 'stock',
         productId: productId,
         severity: currentSeverity,
         createdAt: DBfactory.nowIso(),
