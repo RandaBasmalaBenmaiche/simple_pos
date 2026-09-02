@@ -44,6 +44,7 @@ class _POSPageOverviewState extends State<POSPageOverview> {
   DateTime? endDate;
   SortMode _sortMode = SortMode.latin;
   SortOrder _sortOrder = SortOrder.ascending;
+  Set<int> _selectedProductIds = {};
 
   @override
   void initState() {
@@ -219,6 +220,62 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('تم تحديث الحد الأدنى لجميع المنتجات')),
     );
+  }
+
+  void _toggleProductSelection(int id) {
+    setState(() {
+      if (_selectedProductIds.contains(id)) {
+        _selectedProductIds.remove(id);
+      } else {
+        _selectedProductIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _printSelectedBarcodes() async {
+    if (_selectedProductIds.isEmpty) return;
+
+    final selectedProducts = allProducts.where((p) => _selectedProductIds.contains(p['id'] as int)).toList();
+    if (selectedProducts.isEmpty) return;
+
+    final fontData = await rootBundle.load("assets/fonts/NotoNaskhArabic-VariableFont_wght.ttf");
+    final ttf = pw.Font.ttf(fontData);
+
+    final pdf = pw.Document();
+    pdf.addPage(
+      pw.MultiPage(
+        textDirection: pw.TextDirection.ltr,
+        build: (pw.Context context) {
+          return [
+            pw.Wrap(
+              spacing: 20,
+              runSpacing: 20,
+              children: selectedProducts.map((product) {
+                final name = product['productName']?.toString() ?? 'منتج';
+                final code = product['productCodeBar']?.toString() ?? '';
+                return pw.Column(
+                  children: [
+                    pw.Text(
+                      _fixArabic(name),
+                      style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, font: ttf),
+                    ),
+                    pw.BarcodeWidget(
+                      barcode: pw.Barcode.code128(),
+                      data: code,
+                      width: 100,
+                      height: 50,
+                    ),
+                    pw.Text(code, style: const pw.TextStyle(fontSize: 10)),
+                  ],
+                );
+              }).toList(),
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
   }
 
   Future<void> _exportLowStockPdf(int store) async {
@@ -834,6 +891,19 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _selectedProductIds.isEmpty ? null : _printSelectedBarcodes,
+                      icon: const Icon(Icons.print, size: 18),
+                      label: const Text("طباعة المحددة"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -888,24 +958,36 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                 final buyingPrice =
                     DisplayFormatters.price(product['productBuyingPrice']);
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  color: _getProductPastelColor(product),
-                  child: ListTile(
-                    onTap: () => _editProductDetails(product),
-                    title: Text(name),
-                    subtitle: Text(
-                      "الكود: $code - الكمية: ${DisplayFormatters.quantity(quantity)}",
+                final productId = product['id'] as int;
+                final isSelected = _selectedProductIds.contains(productId);
+
+                return InkWell(
+                  onSecondaryTap: () => _toggleProductSelection(productId),
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    color: _getProductPastelColor(product),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: isSelected
+                          ? const BorderSide(color: Colors.blue, width: 3)
+                          : BorderSide.none,
                     ),
-                    trailing: SizedBox(
-                      width: 140,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text("سعر البيع: $price دج"),
-                          Text("سعر الشراء: $buyingPrice دج"),
-                        ],
+                    child: ListTile(
+                      onTap: () => _editProductDetails(product),
+                      title: Text(name),
+                      subtitle: Text(
+                        "الكود: $code - الكمية: ${DisplayFormatters.quantity(quantity)}",
+                      ),
+                      trailing: SizedBox(
+                        width: 140,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text("سعر البيع: $price دج"),
+                            Text("سعر الشراء: $buyingPrice دج"),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1100,24 +1182,36 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                         final buyingPrice =
                             DisplayFormatters.price(product['productBuyingPrice']);
 
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          color: _getProductPastelColor(product),
-                          child: ListTile(
-                            onTap: () => _editProductDetails(product),
-                            title: Text(name),
-                            subtitle: Text(
-                              "الكود: $code - الكمية: ${DisplayFormatters.quantity(quantity)}",
+                        final productId = product['id'] as int;
+                        final isSelected = _selectedProductIds.contains(productId);
+
+                        return InkWell(
+                          onSecondaryTap: () => _toggleProductSelection(productId),
+                          child: Card(
+                            margin: const EdgeInsets.symmetric(vertical: 6),
+                            color: _getProductPastelColor(product),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: isSelected
+                                  ? const BorderSide(color: Colors.blue, width: 3)
+                                  : BorderSide.none,
                             ),
-                            trailing: SizedBox(
-                              width: 140,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text("سعر البيع: $price دج"),
-                                  Text("سعر الشراء: $buyingPrice دج"),
-                                ],
+                            child: ListTile(
+                              onTap: () => _editProductDetails(product),
+                              title: Text(name),
+                              subtitle: Text(
+                                "الكود: $code - الكمية: ${DisplayFormatters.quantity(quantity)}",
+                              ),
+                              trailing: SizedBox(
+                                width: 140,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text("سعر البيع: $price دج"),
+                                    Text("سعر الشراء: $buyingPrice دج"),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
