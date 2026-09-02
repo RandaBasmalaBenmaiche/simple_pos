@@ -133474,7 +133474,7 @@ J8(a){return this.aNr(a)},
 aNr(a0){var s=0,r=A.w(t.xW),q,p=2,o=[],n,m,l,k,j,i,h,g,f,e,d,c,b,a
 var $async$J8=A.r(function(a1,a2){if(a1===1){o.push(a2)
 s=p}for(;;)switch(s){case 0:c=A.bxz("https","generativelanguage.googleapis.com","v1beta",null)
-b=new A.apR(A.bq_("gemini-3.5-flash"),B.aU5,null,null,new A.arn("AQ.Ab8RN6JVLjxmeyyZOJ6KwMOaVh_yZkNj0frBsoxmknHq6OyODw",null),c,null,null)
+b=new A.apR(A.bq_("gemini-3.5-flash"),B.aU5,null,null,new A.arn("AIzaSyCbdiMm3Gf92q87lAuGv28rgE5TMrXqezA",null),c,null,null)
 c=A.O(A.b([new A.n0('You are a specialized OCR and product extraction agent for a POS system. Your task is to read an image of a product list or invoice and extract all products and their quantities.\n\nFollow these rules strictly:\n1. Extract every visible product and its associated quantity.\n2. Preserve the product name exactly as written in the image.\n3. Handle Arabic, French, English, and mixed-language text.\n4. Distinguish clearly between the product name and the quantity.\n5. Return the data ONLY as a valid JSON array of objects.\n6. Do not include any markdown formatting (like ```json), no preamble, and no post-amble.\n7. If a quantity is not visible, use \'1\'.\n8. If the image is low quality, extract the most likely text.\n9. Never invent products or quantities that are not in the image.\n\nExpected JSON format:\n[\n  {\n    "name": "Coca Cola 33cl",\n    "quantity": "10"\n  },\n  {\n    "name": "Eau Min\xe9rale 1.5L",\n    "quantity": "5"\n  }\n]\n'),new A.Xc("image/jpeg",new Uint8Array(A.aX(a0)))],t.Uz),t.z2)
 n=A.b([new A.rF("user",c)],t.kQ)
 p=4
