@@ -85,38 +85,45 @@ class _ProductMatchingDialogState extends State<ProductMatchingDialog> {
 
     for (var item in matchingData) {
       final productId = item['matchedProductId'] as int?;
-      if (productId == null) {
-        overallSuccess = false;
-        continue;
-      }
-
+      final extractedName = (item['nameController'] as TextEditingController).text;
       final qty = double.tryParse((item['qtyController'] as TextEditingController).text) ?? 0;
 
-      // Update stock quantity
-      final product = await stockTable.getProductById(productId);
-      if (product != null) {
-        final currentQty = double.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
-        final newQty = (currentQty + qty).toString();
+      if (productId != null) {
+        // Update stock quantity
+        final product = await stockTable.getProductById(productId);
+        if (product != null) {
+          final currentQty = double.tryParse(product['productQuantity']?.toString() ?? '0') ?? 0;
+          final newQty = (currentQty + qty).toString();
 
-        await stockTable.updateProductById(
-          id: productId,
-          newQuantity: newQty,
-        );
-
-        // Save as alias if it's different from the original product name
-        final originalName = product['productName'] as String;
-        final extractedName = (item['nameController'] as TextEditingController).text;
-        if (extractedName.trim().toLowerCase() != originalName.trim().toLowerCase()) {
-          await aliasTable.saveAlias(
-            productId: productId,
-            productSyncId: product['sync_id']?.toString() ?? '',
-            aliasName: extractedName,
-            storeId: widget.storeId,
-            storeSyncId: (await DBfactory.storesStore.record(widget.storeId).get(await DBfactory.getDatabase()))?['sync_id']?.toString() ?? '',
+          await stockTable.updateProductById(
+            id: productId,
+            newQuantity: newQty,
           );
+
+          // Save as alias if it's different from the original product name
+          final originalName = product['productName'] as String;
+          if (extractedName.trim().toLowerCase() != originalName.trim().toLowerCase()) {
+            await aliasTable.saveAlias(
+              productId: productId,
+              productSyncId: product['sync_id']?.toString() ?? '',
+              aliasName: extractedName,
+              storeId: widget.storeId,
+              storeSyncId: (await DBfactory.storesStore.record(widget.storeId).get(await DBfactory.getDatabase()))?['sync_id']?.toString() ?? '',
+            );
+          }
+        } else {
+          overallSuccess = false;
         }
       } else {
-        overallSuccess = false;
+        // Create new product if no match was found
+        final newId = await stockTable.insertProduct(
+          storeId: widget.storeId,
+          name: extractedName,
+          quantity: qty.toString(),
+        );
+        if (newId == null) {
+          overallSuccess = false;
+        }
       }
     }
 
@@ -126,6 +133,47 @@ class _ProductMatchingDialogState extends State<ProductMatchingDialog> {
 
     if (mounted) {
       Navigator.pop(context, overallSuccess);
+    }
+  }
+
+  Future<void> _suggestMatch(Map<String, dynamic> item) async {
+    final name = (item['nameController'] as TextEditingController).text;
+    if (name.trim().isEmpty) return;
+
+    final aliasTable = DAliasesTable();
+    final stockTable = DStockTable();
+
+    // 1. Check aliases
+    final aliasMatch = await aliasTable.getAliasForName(name, widget.storeId);
+    if (aliasMatch != null) {
+      final productId = aliasMatch['product_id'] as int;
+      final product = await stockTable.getProductById(productId);
+      if (product != null) {
+        setState(() {
+          item['matchedProductId'] = productId;
+          item['matchedProductName'] = product['productName'];
+          (item['controller'] as TextEditingController).text = product['productName'];
+        });
+        return;
+      }
+    }
+
+    // 2. Check exact name match in stock
+    final productMatch = await stockTable.getProductByName(name, widget.storeId);
+    if (productMatch != null) {
+      setState(() {
+        item['matchedProductId'] = productMatch['id'];
+        item['matchedProductName'] = productMatch['productName'];
+        (item['controller'] as TextEditingController).text = productMatch['productName'];
+      });
+      return;
+    }
+
+    // No match found
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("لم يتم العثور على منتج مطابق")),
+      );
     }
   }
 
@@ -181,38 +229,75 @@ class _ProductMatchingDialogState extends State<ProductMatchingDialog> {
                       ),
                       DataCell(
                         SizedBox(
-                          width: 200,
-                          child: TypeAheadField<Map<String, dynamic>>(
-                            suggestionsCallback: (pattern) async {
-                              final stockTable = DStockTable();
-                              final allProducts = await stockTable.getProductsByStore(widget.storeId);
-                              return allProducts.where((p) {
-                                final name = (p['productName'] as String).toLowerCase();
-                                return name.contains(pattern.toLowerCase());
-                              }).toList();
-                            },
-                            itemBuilder: (context, product) {
-                              return ListTile(
-                                title: Text(product['productName'] ?? ''),
-                              );
-                            },
-                            onSelected: (product) {
-                              setState(() {
-                                item['matchedProductId'] = product['id'];
-                                item['matchedProductName'] = product['productName'];
-                                (item['controller'] as TextEditingController).text = product['productName'];
-                              });
-                            },
-                            builder: (context, controller, focusNode) {
-                              return TextField(
-                                controller: item['controller'] as TextEditingController,
-                                focusNode: focusNode,
-                                decoration: const InputDecoration(
-                                  hintText: "بحث عن منتج...",
-                                  isDense: true,
+                          width: 250,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TypeAheadField<Map<String, dynamic>>(
+                                  suggestionsCallback: (pattern) async {
+                                    final stockTable = DStockTable();
+                                    final aliasTable = DAliasesTable();
+                                    final storeId = widget.storeId;
+                                    final query = pattern.toLowerCase();
+
+                                    final allProducts = await stockTable.getProductsByStore(storeId);
+
+                                    // Find products where name matches OR any of its aliases match
+                                    final matchingProducts = <Map<String, dynamic>>[];
+
+                                    for (var p in allProducts) {
+                                      final name = (p['productName'] as String).toLowerCase();
+                                      if (name.contains(query)) {
+                                        matchingProducts.add(p);
+                                        continue;
+                                      }
+
+                                      // Check all aliases for this product
+                                      final db = await DBfactory.getDatabase();
+                                      final aliasSnapshots = await DBfactory.productAliasesStore.find(db);
+                                      final hasMatchingAlias = aliasSnapshots.any((s) {
+                                        final record = s.value as Map<String, Object?>;
+                                        return record['product_id'] == p['id'] &&
+                                               record['alias_name']?.toString().toLowerCase().contains(query) == true &&
+                                               record['store_id'] == storeId;
+                                      });
+
+                                      if (hasMatchingAlias) {
+                                        matchingProducts.add(p);
+                                      }
+                                    }
+                                    return matchingProducts;
+                                  },
+                                  itemBuilder: (context, product) {
+                                    return ListTile(
+                                      title: Text(product['productName'] ?? ''),
+                                    );
+                                  },
+                                  onSelected: (product) {
+                                    setState(() {
+                                      item['matchedProductId'] = product['id'];
+                                      item['matchedProductName'] = product['productName'];
+                                      (item['controller'] as TextEditingController).text = product['productName'];
+                                    });
+                                  },
+                                  builder: (context, controller, focusNode) {
+                                    return TextField(
+                                      controller: item['controller'] as TextEditingController,
+                                      focusNode: focusNode,
+                                      decoration: const InputDecoration(
+                                        hintText: "بحث عن منتج...",
+                                        isDense: true,
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.link, size: 20, color: Colors.blue),
+                                onPressed: () => _suggestMatch(item),
+                                tooltip: "ربط تلقائي",
+                              ),
+                            ],
                           ),
                         ),
                       ),
