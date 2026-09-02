@@ -141,6 +141,34 @@ Future<void> showAddProductDialog(
                     keyboardType: TextInputType.number,
                     numbersOnly: true,
                     context: context,
+                    suffix: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.refresh, color: Colors.grey),
+                          onPressed: () async {
+                            final items = await DStockTable().getProductsByStore(storeId);
+                            int maxCode = 0;
+                            for (var item in items) {
+                              final code = int.tryParse(item['productCodeBar']?.toString() ?? '0') ?? 0;
+                              if (code > maxCode) maxCode = code;
+                            }
+                            setState(() {
+                              codeController.text = (maxCode + 1).toString();
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy, color: Colors.grey),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: codeController.text));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("تم نسخ الكود")),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -206,6 +234,7 @@ Widget _buildTextField({
   TextInputType keyboardType = TextInputType.text,
   bool numbersOnly = false,
   void Function()? onSubmit,
+  Widget? suffix,
   context,
 }) {
   return TextField(
@@ -230,6 +259,7 @@ Widget _buildTextField({
       ),
       filled: true,
       fillColor: MyColors.secondColor(context),
+      suffixIcon: suffix,
     ),
   );
 }

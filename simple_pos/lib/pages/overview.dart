@@ -19,7 +19,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart';
 import 'package:arabic_reshaper/arabic_reshaper.dart';
 import 'package:bidi/bidi.dart' as bidi_lib;
 
@@ -339,6 +339,9 @@ class _POSPageOverviewState extends State<POSPageOverview> {
         TextEditingController(text: (product['productPrice'] ?? 0).toString());
     final minStockController =
         TextEditingController(text: (product['min_stock'] ?? 0).toString());
+    final barcodeController =
+        TextEditingController(text: (product['productCodeBar'] ?? '').toString());
+    final printCountController = TextEditingController();
 
     final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
 
@@ -349,47 +352,215 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text("تعديل ${product['productName'] ?? 'غير محدد'}"),
-          content: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 300),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: buyingController,
-                    focusNode: buyingFocusNode,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "سعر الشراء"),
-                    textInputAction: TextInputAction.next,
-                    onSubmitted: (_) {
-                      FocusScope.of(context).requestFocus(sellingFocusNode);
-                    },
+        return StatefulBuilder(
+          builder: (context, setState) {
+            Future<void> printBarcodes(BuildContext context) async {
+              final String code = barcodeController.text;
+              final String productName = product['productName']?.toString() ?? 'منتج';
+              final int count = int.tryParse(printCountController.text) ?? 0;
+
+              if (code.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("الرجاء إدخال كود المنتج")));
+                return;
+              }
+
+              if (count <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("الرجاء إدخال عدد الأكواد المراد طباعتها")));
+                return;
+              }
+
+              final pdf = pw.Document();
+
+              pdf.addPage(
+                pw.MultiPage(
+                  build: (pw.Context context) {
+                    return [
+                      pw.Wrap(
+                        spacing: 20,
+                        runSpacing: 20,
+                        children: List.generate(
+                          count,
+                          (index) => pw.Column(
+                            children: [
+                              pw.Text(productName,
+                                  style: pw.TextStyle(
+                                      fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                              pw.BarcodeWidget(
+                                barcode: pw.Barcode.code128(),
+                                data: code,
+                                width: 100,
+                                height: 50,
+                              ),
+                              pw.Text(code, style: const pw.TextStyle(fontSize: 10)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ];
+                  },
+                ),
+              );
+
+              await Printing.layoutPdf(
+                onLayout: (PdfPageFormat format) async => pdf.save(),
+              );
+            }
+
+            return AlertDialog(
+              title: Text("تعديل ${product['productName'] ?? 'غير محدد'}"),
+              content: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 500),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: barcodeController,
+                              decoration: const InputDecoration(labelText: "كود المنتج"),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () async {
+                              final productsList = await DStockTable().getProductsByStore(store);
+                              int maxCode = 0;
+                              for (var p in productsList) {
+                                final c = int.tryParse(p['productCodeBar']?.toString() ?? '0') ?? 0;
+                                if (c > maxCode) maxCode = c;
+                              }
+                              setState(() {
+                                barcodeController.text = (maxCode + 1).toString();
+                              });
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: barcodeController.text));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("تم نسخ الكود")),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: buyingController,
+                        focusNode: buyingFocusNode,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "سعر الشراء"),
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) {
+                          FocusScope.of(context).requestFocus(sellingFocusNode);
+                        },
+                      ),
+                      TextField(
+                        controller: sellingController,
+                        focusNode: sellingFocusNode,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "سعر البيع"),
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) {
+                          FocusScope.of(context).requestFocus(minStockFocusNode);
+                        },
+                      ),
+                      TextField(
+                        controller: minStockController,
+                        focusNode: minStockFocusNode,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "الحد الأدنى للمخزون"),
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) async {
+                          double newBuying =
+                              double.tryParse(buyingController.text) ?? 0;
+                          double newSelling =
+                              double.tryParse(sellingController.text) ?? 0;
+                          int newMinStock =
+                              int.tryParse(minStockController.text) ?? 0;
+                          final newCode = barcodeController.text;
+
+                          final stockTable = DStockTable();
+                          bool success = false;
+                          final productId = product['id'] as int?;
+
+                          if (productId != null) {
+                            success = await stockTable.updateProductById(
+                              id: productId,
+                              newBuyingPrice: newBuying.toString(),
+                              newPrice: newSelling.toString(),
+                              newMinStock: newMinStock,
+                            );
+                            if (success && newCode != (product['productCodeBar'] ?? '')) {
+                              await stockTable.updateProductById(
+                                id: productId,
+                                newCodeBar: newCode,
+                              );
+                            }
+                          }
+
+                          if (!success) {
+                            success = await stockTable.updateProductPrices(
+                              codeBar: product['productCodeBar'] ?? '',
+                              storeId: store,
+                              newBuyingPrice: newBuying,
+                              newSellingPrice: newSelling,
+                            );
+                          }
+
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            _loadData(store);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: printCountController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "عدد الأكواد للطباعة"),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueGrey,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => printBarcodes(context),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text("حفظ PDF طباعة",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 18)),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  TextField(
-                    controller: sellingController,
-                    focusNode: sellingFocusNode,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "سعر البيع"),
-                    textInputAction: TextInputAction.next,
-                    onSubmitted: (_) {
-                      FocusScope.of(context).requestFocus(minStockFocusNode);
-                    },
-                  ),
-                  TextField(
-                    controller: minStockController,
-                    focusNode: minStockFocusNode,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "الحد الأدنى للمخزون"),
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) async {
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("إلغاء")),
+                ElevatedButton(
+                    onPressed: () async {
                       double newBuying =
                           double.tryParse(buyingController.text) ?? 0;
                       double newSelling =
                           double.tryParse(sellingController.text) ?? 0;
                       int newMinStock =
                           int.tryParse(minStockController.text) ?? 0;
+                      final newCode = barcodeController.text;
 
                       final stockTable = DStockTable();
                       bool success = false;
@@ -402,6 +573,12 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                           newPrice: newSelling.toString(),
                           newMinStock: newMinStock,
                         );
+                        if (success && newCode != (product['productCodeBar'] ?? '')) {
+                          await stockTable.updateProductById(
+                            id: productId,
+                            newCodeBar: newCode,
+                          );
+                        }
                       }
 
                       if (!success) {
@@ -418,64 +595,13 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                         _loadData(store);
                       }
                     },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("إلغاء")),
-            ElevatedButton(
-                onPressed: () async {
-                  double newBuying =
-                      double.tryParse(buyingController.text) ?? 0;
-                  double newSelling =
-                      double.tryParse(sellingController.text) ?? 0;
-                  int newMinStock =
-                      int.tryParse(minStockController.text) ?? 0;
-
-                  final stockTable = DStockTable();
-                  bool success = false;
-                  final productId = product['id'] as int?;
-
-                  if (productId != null) {
-                    success = await stockTable.updateProductById(
-                      id: productId,
-                      newBuyingPrice: newBuying.toString(),
-                      newPrice: newSelling.toString(),
-                      newMinStock: newMinStock,
-                    );
-                  }
-
-                  if (!success) {
-                    success = await stockTable.updateProductPrices(
-                      codeBar: product['productCodeBar'] ?? '',
-                      storeId: store,
-                      newBuyingPrice: newBuying,
-                      newSellingPrice: newSelling,
-                    );
-                  }
-
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    _loadData(store);
-                  }
-                },
-                child: const Text("حفظ")),
-          ],
+                    child: const Text("حفظ")),
+              ],
+            );
+          },
         );
       },
     );
-
-    // Cleanup
-    buyingController.dispose();
-    sellingController.dispose();
-    minStockController.dispose();
-    buyingFocusNode.dispose();
-    sellingFocusNode.dispose();
-    minStockFocusNode.dispose();
   }
 
   Future<void> _addProductFromImage() async {

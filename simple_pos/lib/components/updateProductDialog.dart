@@ -92,10 +92,12 @@ class _EditProductDialogState extends State<EditProductDialog> {
     nameController.dispose();
     priceController.dispose();
     quantityController.dispose();
+
     newCodeFocus.dispose();
     nameFocus.dispose();
     priceFocus.dispose();
     quantityFocus.dispose();
+
     super.dispose();
   }
 

@@ -4,6 +4,11 @@ import 'package:simple_pos/components/scrollArrowButtons.dart';
 import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:simple_pos/services/cubits/storeCubit.dart';
 
 class POSStockItemsTable extends StatefulWidget {
   final List<Map<String, dynamic>> items;
@@ -211,6 +216,7 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                                         Navigator.pop(context);
                                         widget.onStockUpdated();
                                       } else {
+                                        if (!context.mounted) return;
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(content: Text("حدث خطأ أثناء التحديث")),
                                         );
@@ -219,11 +225,11 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                                     child: const Text("حفظ"),
                                   ),
                                 ],
-                              ),
-                            ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                     );
                   },
                   child: Container(
@@ -312,8 +318,8 @@ class _POSStockItemsTableState extends State<POSStockItemsTable> {
                 );
               },
             ),
-          ),
-      ),],
+          ),)
+        ],
       ),
     );
   }
