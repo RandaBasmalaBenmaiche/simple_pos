@@ -182,9 +182,12 @@ Future<void> showAddProductDialog(
                                 if (c > maxCode) maxCode = c;
                               }
                             }
-                            int nextCode = maxCode + 1;
+                            // Start from 200,000,000,000 to avoid leading zeros and look natural
+                            const int minEanBase = 200000000000;
+                            int nextCode = (maxCode < minEanBase) ? minEanBase : maxCode + 1;
+
                             if (nextCode > 999999999999) {
-                              nextCode = 1;
+                              nextCode = minEanBase;
                             }
                             String base = nextCode.toString().padLeft(12, '0');
                             setState(() {
