@@ -129150,8 +129150,8 @@ if(n>=12&&n<=13){l=A.eg(B.p.ae(m,0,12),null)
 if(l==null)l=0
 if(l>o)o=l}s=3
 break
-case 4:k=o+1
-q.b.$1(new A.b3g(q.c,B.p.cF(B.l.j(k>999999999999?1:k),12,"0")))
+case 4:k=o<2e11?2e11:o+1
+q.b.$1(new A.b3g(q.c,B.p.cF(B.l.j(k>999999999999?2e11:k),12,"0")))
 return A.u(null,r)}})
 return A.v($async$$0,r)},
 $S:6}
@@ -132165,15 +132165,15 @@ return A.u(null,r)}})
 return A.v($async$$0,r)},
 $S:6}
 A.aTu.prototype={
-$0(){var s,r,q,p,o,n,m
+$0(){var s,r,q,p,o,n,m,l=2e11
 for(s=J.aE(this.a),r=0;s.q();){q=J.h(s.gJ(s),"productCodeBar")
 p=q==null?null:J.J(q)
 if(p==null)p=""
 q=p.length
 if(q>=12&&q<=13){o=A.eg(B.p.ae(p,0,12),null)
 if(o==null)o=0
-if(o>r)r=o}}n=r+1
-m=B.p.cF(B.l.j(n>999999999999?1:n),12,"0")
+if(o>r)r=o}}n=r<2e11?l:r+1
+m=B.p.cF(B.l.j(n>999999999999?l:n),12,"0")
 this.b.sb5(0,m+A.bby(m))},
 $S:0}
 A.aTw.prototype={
