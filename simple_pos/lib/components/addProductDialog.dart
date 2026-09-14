@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablestock.dart';
+import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -150,11 +151,20 @@ Future<void> showAddProductDialog(
                             final items = await DStockTable().getProductsByStore(storeId);
                             int maxCode = 0;
                             for (var item in items) {
-                              final code = int.tryParse(item['productCodeBar']?.toString() ?? '0') ?? 0;
-                              if (code > maxCode) maxCode = code;
+                              final codeStr = item['productCodeBar']?.toString() ?? '';
+                              if (codeStr.length >= 12 && codeStr.length <= 13) {
+                                final baseCode = codeStr.substring(0, 12);
+                                final c = int.tryParse(baseCode) ?? 0;
+                                if (c > maxCode) maxCode = c;
+                              }
                             }
+                            int nextCode = maxCode + 1;
+                            if (nextCode > 999999999999) {
+                              nextCode = 1;
+                            }
+                            String base = nextCode.toString().padLeft(12, '0');
                             setState(() {
-                              codeController.text = (maxCode + 1).toString();
+                              codeController.text = base + DisplayFormatters.calculateEan13Checksum(base);
                             });
                           },
                         ),

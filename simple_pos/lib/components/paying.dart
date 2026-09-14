@@ -40,7 +40,7 @@ Future<void> showPayingAmountDialog(
                 ),
                 onSubmitted: (_) {
                   final value = double.tryParse(amountController.text);
-                  if (value == null || value <= 0) {
+                  if (value == null || value < 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("الرجاء إدخال مبلغ صحيح")),
                     );
@@ -73,7 +73,7 @@ Future<void> showPayingAmountDialog(
                     ),
                     onPressed: () {
                       final value = double.tryParse(amountController.text);
-                      if (value == null || value <= 0) {
+                      if (value == null || value < 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text("الرجاء إدخال مبلغ صحيح")),
                         );

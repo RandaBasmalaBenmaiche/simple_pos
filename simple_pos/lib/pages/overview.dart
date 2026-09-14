@@ -256,6 +256,17 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     });
   }
 
+  String _calculateEan13Checksum(String code) {
+    if (code.length != 12) return '';
+    int sum = 0;
+    for (int i = 0; i < 12; i++) {
+      int digit = int.tryParse(code[i]) ?? 0;
+      sum += (i % 2 == 0) ? digit * 1 : digit * 3;
+    }
+    int checksum = (10 - (sum % 10)) % 10;
+    return checksum.toString();
+  }
+
   Future<void> _printSelectedBarcodes() async {
     if (_selectedProductIds.isEmpty) return;
 
@@ -284,8 +295,8 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                       style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, font: ttf),
                     ),
                     pw.BarcodeWidget(
-                      barcode: pw.Barcode.code128(),
-                      data: code,
+                      barcode: pw.Barcode.ean13(),
+                      data: code.length == 13 ? code.substring(0, 12) : code,
                       width: 100,
                       height: 50,
                     ),
@@ -446,6 +457,12 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                 return;
               }
 
+              if (code.length != 13 || !RegExp(r'^\d+$').hasMatch(code)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("كود المنتج يجب أن يتكون من 13 رقماً بالضبط ليكون بصيغة EAN 13")));
+                return;
+              }
+
               if (count <= 0) {
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("الرجاء إدخال عدد الأكواد المراد طباعتها")));
@@ -469,8 +486,8 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                                   style: pw.TextStyle(
                                       fontSize: 12, fontWeight: pw.FontWeight.bold)),
                               pw.BarcodeWidget(
-                                barcode: pw.Barcode.code128(),
-                                data: code,
+                                barcode: pw.Barcode.ean13(),
+                                data: code.length == 13 ? code.substring(0, 12) : code,
                                 width: 100,
                                 height: 50,
                               ),
@@ -509,13 +526,22 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                             icon: const Icon(Icons.refresh),
                             onPressed: () async {
                               final productsList = await DStockTable().getProductsByStore(store);
-                              int maxCode = 0;
-                              for (var p in productsList) {
-                                final c = int.tryParse(p['productCodeBar']?.toString() ?? '0') ?? 0;
-                                if (c > maxCode) maxCode = c;
-                              }
                               setState(() {
-                                barcodeController.text = (maxCode + 1).toString();
+                                int maxCode = 0;
+                                for (var p in productsList) {
+                                  final codeStr = p['productCodeBar']?.toString() ?? '';
+                                  if (codeStr.length >= 12 && codeStr.length <= 13) {
+                                    final baseCode = codeStr.substring(0, 12);
+                                    final c = int.tryParse(baseCode) ?? 0;
+                                    if (c > maxCode) maxCode = c;
+                                  }
+                                }
+                                int nextCode = maxCode + 1;
+                                if (nextCode > 999999999999) {
+                                  nextCode = 1;
+                                }
+                                String base = nextCode.toString().padLeft(12, '0');
+                                barcodeController.text = base + DisplayFormatters.calculateEan13Checksum(base);
                               });
                             },
                           ),
