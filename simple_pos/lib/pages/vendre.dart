@@ -12,6 +12,8 @@ import 'package:simple_pos/components/alphaNumericInputField.dart';
 import 'package:simple_pos/components/paying.dart';
 import 'package:simple_pos/components/sellButton.dart';
 import 'package:simple_pos/components/sellTable.dart';
+import 'package:simple_pos/components/addCustomerDialog.dart';
+import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/cubits/notification_cubit.dart';
 import 'package:simple_pos/services/formatters/display_formatters.dart';
@@ -430,14 +432,35 @@ class _POSPageState extends State<POSPage> {
                   const SizedBox(width: 16),
                   Expanded(
                     flex: 2,
-                    child: ClientSelector(
-                      storeId: currentStoreId,
-                      onClientSelected: (client) {
-                        setState(() {
-                          _selectedClient = client;
-                        });
-                      },
-                      initialClient: _selectedClient,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ClientSelector(
+                            storeId: currentStoreId,
+                            onClientSelected: (client) {
+                              setState(() {
+                                _selectedClient = client;
+                              });
+                            },
+                            initialClient: _selectedClient,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle, color: Colors.blue, size: 30),
+                          onPressed: () {
+                            showAddCustomerDialog(context, (name, phone, debt) async {
+                              await DCustomersTable().insertCustomer(
+                                storeId: currentStoreId,
+                                name: name,
+                                phone: phone,
+                                debt: double.tryParse(debt) ?? 0,
+                              );
+                              // ClientSelector should handle the update via real-time or store reload
+                            });
+                          },
+                          tooltip: "إضافة عميل سريع",
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 16),

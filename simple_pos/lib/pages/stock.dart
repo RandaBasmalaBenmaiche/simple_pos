@@ -21,6 +21,7 @@ import 'package:simple_pos/services/utils/sort_utils.dart';
 import 'package:simple_pos/styles/my_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:simple_pos/main.dart';
+import 'package:simple_pos/pages/vendre.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -382,7 +383,12 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
             Expanded(
               child: POSStockItemsTable(
                 items: items,
-                sellItems: () {},
+                sellItems: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const POSPage()),
+                  );
+                },
                 onQuantityChanged: (index, newQuantity) async {
                   final product = items[index];
                   final productKeyId = product['id'];
@@ -407,9 +413,7 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                               newQuantity.isNotEmpty ? newQuantity : null,
                           storeId: store,
                         );
-                  if (!success && mounted) {
-                    await _loadItems(store);
-                  } else if (mounted) {
+                  if (mounted) {
                     await _loadItems(store);
                   }
                 },
@@ -428,11 +432,9 @@ class _POSPageState extends State<POSPageStock> with RouteAware {
                           id: productId,
                           newMinStock: newMinStock,
                         )
-                      : false; // MinStock update by ID is preferred
+                      : false;
 
-                  if (!success && mounted) {
-                    await _loadItems(store);
-                  } else if (mounted) {
+                  if (mounted) {
                     await _loadItems(store);
                   }
                 },

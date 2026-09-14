@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:simple_pos/components/scrollArrowButtons.dart';
 import 'package:simple_pos/services/formatters/display_formatters.dart';
 import 'package:simple_pos/styles/my_colors.dart';
+import 'package:simple_pos/components/paymentHistoryDialog.dart';
 
 class POSCustomersTable extends StatefulWidget {
   final List<Map<String, dynamic>> customers;
   final Function(int index) onDelete;
   final Function(int index) onEdit;
   final Function(int index) onPayDebt;
+  final Function(int index) onViewPayments;
 
   const POSCustomersTable({
     super.key,
@@ -15,6 +17,7 @@ class POSCustomersTable extends StatefulWidget {
     required this.onDelete,
     required this.onEdit,
     required this.onPayDebt,
+    required this.onViewPayments,
   });
 
   @override
@@ -112,6 +115,10 @@ class _POSCustomersTableState extends State<POSCustomersTable> {
                       Expanded(
                         flex: 2,
                         child: Text(DisplayFormatters.customerId(customer['id'])),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.history, color: Colors.orange),
+                        onPressed: () => widget.onViewPayments(index),
                       ),
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.blue),

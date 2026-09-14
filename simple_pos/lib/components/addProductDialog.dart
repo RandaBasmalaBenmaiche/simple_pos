@@ -40,6 +40,30 @@ Future<void> showAddProductDialog(
       return;
     }
 
+    // Validate numeric fields to avoid parsing crashes
+    final priceVal = priceController.text;
+    final buyingPriceVal = buyingPriceController.text;
+    final quantityVal = quantityController.text;
+
+    if (priceVal.isNotEmpty && double.tryParse(priceVal) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("سعر البيع يجب أن يكون رقماً")),
+      );
+      return;
+    }
+    if (buyingPriceVal.isNotEmpty && double.tryParse(buyingPriceVal) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("سعر الشراء يجب أن يكون رقماً")),
+      );
+      return;
+    }
+    if (quantityVal.isNotEmpty && int.tryParse(quantityVal) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("الكمية يجب أن تكون رقماً صحيحاً")),
+      );
+      return;
+    }
+
     // Check if code exists only if code is provided
     if (codeController.text.isNotEmpty) {
       final items = await DStockTable().getProductsByStore(storeId);

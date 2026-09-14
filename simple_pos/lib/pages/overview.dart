@@ -43,6 +43,8 @@ class _POSPageOverviewState extends State<POSPageOverview> {
   TextEditingController applyAllController = TextEditingController();
   DateTime? startDate;
   DateTime? endDate;
+  DateTime _selectedSalesDate = DateTime.now();
+  bool _showDailySales = false;
   SortMode _sortMode = SortMode.latin;
   SortOrder _sortOrder = SortOrder.ascending;
   Set<int> _selectedProductIds = {};
@@ -194,6 +196,54 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     setState(() {
       products = sortProducts(filtered, _sortMode, order: _sortOrder);
     });
+  }
+
+  Future<List<Map<String, dynamic>>> _getDailySalesData(DateTime date, int storeId) async {
+    final dateStr = DateFormat('yyyy-MM-dd').format(date);
+    final invoiceTable = DInvoiceTable();
+    final invoices = await invoiceTable.getInvoices(storeId);
+
+    final dailyInvoices = invoices.where((inv) {
+      final invoiceDate = DateTime.tryParse(inv['date']?.toString() ?? '');
+      if (invoiceDate == null) return false;
+      return DateFormat('yyyy-MM-dd').format(invoiceDate) == dateStr;
+    }).toList();
+    if (dailyInvoices.isEmpty) return [];
+
+    final itemTable = DInvoiceItemsTable();
+    Map<String, Map<String, dynamic>> aggregatedSales = {};
+
+    for (var invoice in dailyInvoices) {
+      final items = await itemTable.getItemsByInvoiceId(invoice['id'] as int);
+      for (var item in items) {
+        final code = item['productCodeBar'] as String;
+        final name = item['productName'] as String;
+        final price = double.tryParse(item['price']?.toString() ?? '0') ?? 0.0;
+        final qty = double.tryParse(item['quantity']?.toString() ?? '0') ?? 0.0;
+        final profit = double.tryParse(item['profit']?.toString() ?? '0') ?? 0.0;
+
+        if (aggregatedSales.containsKey(code)) {
+          aggregatedSales[code]!['quantity'] += qty;
+          aggregatedSales[code]!['totalProfit'] += profit;
+        } else {
+          aggregatedSales[code] = {
+            'name': name,
+            'unitPrice': price,
+            'quantity': qty,
+            'totalProfit': profit,
+          };
+        }
+      }
+    }
+
+    return aggregatedSales.values.map((sale) {
+      final totalQty = sale['quantity'] as double;
+      final totalProfit = sale['totalProfit'] as double;
+      return {
+        ...sale,
+        'profitPerUnit': totalQty > 0 ? totalProfit / totalQty : 0.0,
+      };
+    }).toList();
   }
 
   String _fixArabic(String text) {
@@ -945,11 +995,15 @@ class _POSPageOverviewState extends State<POSPageOverview> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _selectedProductIds.isEmpty ? null : _printSelectedBarcodes,
-                      icon: const Icon(Icons.print, size: 18),
-                      label: const Text("طباعة المحددة"),
+                      onPressed: () {
+                        setState(() {
+                          _showDailySales = true;
+                        });
+                      },
+                      icon: const Icon(Icons.analytics, size: 18),
+                      label: const Text("المبيعات اليومية"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: Colors.indigo,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -963,7 +1017,140 @@ class _POSPageOverviewState extends State<POSPageOverview> {
     
   }
 
+  Widget _buildDailySalesView(BuildContext context) {
+    final store = BlocProvider.of<StoreCubit>(context, listen: false).state;
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _showDailySales = false;
+                  });
+                },
+                icon: const Icon(Icons.arrow_forward),
+                label: const Text("العودة"),
+              ),
+              Text(
+                DateFormat('yyyy-MM-dd').format(_selectedSalesDate),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: () {
+                      setState(() {
+                        _selectedSalesDate = _selectedSalesDate.subtract(const Duration(days: 1));
+                      });
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: () {
+                      setState(() {
+                        _selectedSalesDate = _selectedSalesDate.add(const Duration(days: 1));
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _getDailySalesData(_selectedSalesDate, store),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text("حدث خطأ: ${snapshot.error}"));
+                }
+                final salesData = snapshot.data ?? [];
+                if (salesData.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.info_outline, size: 48, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text("لا توجد مبيعات لهذا اليوم", style: TextStyle(fontSize: 16, color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                }
+
+                double totalDailyProfit = 0;
+                for (var sale in salesData) {
+                  totalDailyProfit += (sale['totalProfit'] as double);
+                }
+
+                return Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: DataTable(
+                          columnSpacing: 20,
+                          columns: const [
+                            DataColumn(label: Text("المنتج")),
+                            DataColumn(label: Text("السعر")),
+                            DataColumn(label: Text("ربح الوحدة")),
+                            DataColumn(label: Text("الكمية")),
+                            DataColumn(label: Text("إجمالي الربح")),
+                          ],
+                          rows: salesData.map((sale) {
+                            return DataRow(cells: [
+                              DataCell(Text(sale['name'] as String)),
+                              DataCell(Text(DisplayFormatters.price(sale['unitPrice']))),
+                              DataCell(Text(DisplayFormatters.price(sale['profitPerUnit']))),
+                              DataCell(Text(DisplayFormatters.quantity(sale['quantity']))),
+                              DataCell(Text(DisplayFormatters.price(sale['totalProfit']))),
+                            ]);
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: MyColors.secondColor(context),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("إجمالي ربح اليوم:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text(
+                            "${DisplayFormatters.price(totalDailyProfit)} دج",
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMainContent(BuildContext context) {
+    if (_showDailySales) {
+      return _buildDailySalesView(context);
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(

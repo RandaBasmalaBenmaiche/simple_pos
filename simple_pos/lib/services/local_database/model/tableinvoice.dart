@@ -286,7 +286,7 @@ class DInvoiceItemsTable {
       'updated_at': raw['updated_at']?.toString(),
       'last_synced_at': raw['last_synced_at']?.toString(),
       'device_id': raw['device_id']?.toString(),
-      'invoice_id': raw['invoice_id'] as int? ?? 0,
+      'invoice_id': int.tryParse(raw['invoice_id']?.toString() ?? '') ?? 0,
       'invoice_sync_id': raw['invoice_sync_id']?.toString(),
       'productCodeBar': raw['productCodeBar']?.toString() ?? '',
       'productName': raw['productName']?.toString() ?? '',

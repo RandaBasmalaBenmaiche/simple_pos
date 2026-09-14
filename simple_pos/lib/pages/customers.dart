@@ -10,6 +10,7 @@ import 'package:simple_pos/components/myAppBar.dart';
 import 'package:simple_pos/components/customersTable.dart';
 import 'package:simple_pos/components/payDebtDialog.dart';
 import 'package:simple_pos/components/sellButton.dart';
+import 'package:simple_pos/components/paymentHistoryDialog.dart';
 import 'package:simple_pos/services/cubits/storeCubit.dart';
 import 'package:simple_pos/services/local_database/model/tablecustomers.dart';
 import 'package:simple_pos/services/platform/download_text.dart';
@@ -277,6 +278,10 @@ Future<void> importCustomersFromCSV(int storeId) async {
                       );
                       await _loadCustomers(store);
                     });
+                  },
+                  onViewPayments: (index) {
+                    final customer = customers[index];
+                    showPaymentHistoryDialog(context, customer);
                   },
                   onDelete: (index) async {
                     final confirm = await showDialog<bool>(
